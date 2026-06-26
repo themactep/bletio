@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["bletio-hci", "bletio-host", "bletio-utils"]
-exclude = ["update-assigned-numbers"]
+exclude = ["update-assigned-numbers", "cli"]
 
 [workspace.package]
 edition = "2021"

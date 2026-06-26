@@ -1,0 +1,18 @@
+[package]
+name = "bletio-cli"
+version = "0.1.0"
+edition = "2021"
+description = "Command-line interface for bletio BLE stack"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+bletio-host = { path = "../bletio-host" }
+bletio-hci = { path = "../bletio-hci" }
+bletio-utils = { path = "../bletio-utils" }
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+libc = "0.2"
+
+# Mark as standalone (not a workspace member)
+[workspace]
