@@ -244,6 +244,45 @@ impl<C: SmpCrypto> SmpPairing<C> {
         if self.is_complete() { Some(&self.stk) } else { None }
     }
 
+    /// Set the Temporary Key for Passkey Entry pairing.
+    ///
+    /// Must be called BEFORE processing any pairing PDUs. The `passkey` is a
+    /// 6-digit number (000000–999999). The TK is derived from the passkey
+    /// per Core Spec Vol. 3, Part H, §2.3.5.1.
+    ///
+    /// # IO Capability → Pairing Method
+    ///
+    /// | Initiator | Responder | Method |
+    /// |-----------|-----------|--------|
+    /// | NoInputNoOutput | NoInputNoOutput | Just Works (TK=0) |
+    /// | DisplayOnly | KeyboardOnly | Passkey Entry (display shows, keyboard inputs) |
+    /// | KeyboardOnly | DisplayOnly | Passkey Entry |
+    /// | KeyboardDisplay | KeyboardDisplay | Passkey Entry or Numeric Comparison |
+    /// | DisplayYesNo | DisplayYesNo | Numeric Comparison |
+    ///
+    /// For Just Works, do not call this method (TK defaults to 0).
+    pub fn set_passkey(&mut self, passkey: u32) -> Result<(), SmpError> {
+        if passkey > 999999 {
+            return Err(SmpError::NotSupported);
+        }
+        let mut tk = [0u8; 16];
+        let mut remaining = passkey;
+        for i in 0..6 {
+            tk[i] = (remaining % 10) as u8;
+            remaining /= 10;
+        }
+        // remaining bytes stay 0
+        self.tk = tk;
+        self.our_confirm = self.compute_c1(&self.our_random)?;
+        Ok(())
+    }
+
+    /// Returns the current Temporary Key (for debugging only, never log in production).
+    #[doc(hidden)]
+    pub fn _debug_tk(&self) -> &[u8; 16] {
+        &self.tk
+    }
+
     /// Generate bond keys after pairing completes.
     ///
     /// Returns an [`SmpKeys`] containing the LTK, EDIV, Rand, IRK, and CSRK
@@ -421,6 +460,94 @@ mod tests {
             }
             o => panic!("{:?}", o),
         }
+    }
+
+    #[test]
+    fn test_passkey_entry_different_stk() {
+        let crypto = MockCrypto;
+
+        // Pairing with passkey 123456 should produce different STK than passkey 654321
+        let passkey1 = 123456u32;
+        let passkey2 = 654321u32;
+
+        let resp_pdu = SmpPdu::PairingResponse {
+            io_capability: IoCapability::DisplayOnly, oob_data_flag: false,
+            auth_req: AuthReq { bonding: true, mitm: true, secure_connections: false, keypress: false, ct2: false },
+            max_encryption_key_size: 16,
+            initiator_key_distribution: KeyDistribution { enc_key: false, id_key: false, sign_key: false, link_key: false },
+            responder_key_distribution: KeyDistribution { enc_key: true, id_key: true, sign_key: false, link_key: false },
+        };
+
+        // First pairing with passkey1
+        let (mut init1, _) = SmpPairing::new_initiator(crypto, cfg([0x11,0x22,0x33,0x44,0x55,0x66], 0));
+        init1.set_passkey(passkey1).unwrap();
+        let confirm1 = match init1.process(&resp_pdu).unwrap() {
+            SmpPairingResult::SendPdu(p) => p, o => panic!("{:?}", o),
+        };
+        let random1 = match init1.process(&confirm1).unwrap() {
+            SmpPairingResult::SendPdu(p) => p, o => panic!("{:?}", o),
+        };
+        let stk1 = match init1.process(&random1).unwrap() {
+            SmpPairingResult::Complete { stk, .. } => stk,
+            o => panic!("{:?}", o),
+        };
+
+        // Second pairing with passkey2
+        let (mut init2, _) = SmpPairing::new_initiator(crypto, cfg([0x11,0x22,0x33,0x44,0x55,0x66], 0));
+        init2.set_passkey(passkey2).unwrap();
+        let confirm2 = match init2.process(&resp_pdu).unwrap() {
+            SmpPairingResult::SendPdu(p) => p, o => panic!("{:?}", o),
+        };
+        let random2 = match init2.process(&confirm2).unwrap() {
+            SmpPairingResult::SendPdu(p) => p, o => panic!("{:?}", o),
+        };
+        let stk2 = match init2.process(&random2).unwrap() {
+            SmpPairingResult::Complete { stk, .. } => stk,
+            o => panic!("{:?}", o),
+        };
+
+        // Different passkeys must produce different STKs
+        assert_ne!(stk1, stk2);
+    }
+
+    #[test]
+    fn test_invalid_passkey_rejected() {
+        let crypto = MockCrypto;
+        let (mut init, _) = SmpPairing::new_initiator(crypto, cfg([0x11,0x22,0x33,0x44,0x55,0x66], 0));
+        assert!(init.set_passkey(1000000).is_err()); // > 999999
+        assert!(init.set_passkey(0).is_ok());
+        assert!(init.set_passkey(999999).is_ok());
+    }
+
+    #[test]
+    fn test_generate_keys_and_distribution_pdus() {
+        let crypto = MockCrypto;
+        let resp_pdu = SmpPdu::PairingResponse {
+            io_capability: IoCapability::NoInputNoOutput, oob_data_flag: false,
+            auth_req: AuthReq { bonding: true, mitm: false, secure_connections: false, keypress: false, ct2: false },
+            max_encryption_key_size: 16,
+            initiator_key_distribution: KeyDistribution { enc_key: false, id_key: false, sign_key: false, link_key: false },
+            responder_key_distribution: KeyDistribution { enc_key: true, id_key: true, sign_key: false, link_key: false },
+        };
+
+        let (mut init, _) = SmpPairing::new_initiator(crypto, cfg([0x11,0x22,0x33,0x44,0x55,0x66], 0));
+        let confirm = match init.process(&resp_pdu).unwrap() {
+            SmpPairingResult::SendPdu(p) => p, o => panic!(),
+        };
+        let random = match init.process(&confirm).unwrap() {
+            SmpPairingResult::SendPdu(p) => p, o => panic!(),
+        };
+        let _ = match init.process(&random).unwrap() {
+            SmpPairingResult::Complete { .. } => {},
+            o => panic!("{:?}", o),
+        };
+
+        assert!(init.is_complete());
+        assert!(init.stk().is_some());
+
+        let keys = init.generate_keys();
+        let pdus = init.build_distribution_pdus(&keys);
+        assert_eq!(pdus.len(), 5);
     }
 
     #[test]
