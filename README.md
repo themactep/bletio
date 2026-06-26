@@ -344,10 +344,10 @@ Attribute Profile (GATT).
 | 5.3 | **LE Isochronous Channels** | 🟢 Low | XL | BLE 5.2 LE Audio support: Connected Isochronous Streams (CIS), Broadcast Isochronous Streams (BIS), isochronous channel commands and events. |
 | 5.4 | **LE Periodic Advertising with Responses (PAwR)** | 🟢 Low | XL | BLE 5.4 feature for bidirectional periodic advertising. |
 | 5.5 | **Connection parameter optimization** | 🟢 Medium | M | Implement the connection parameter update request procedure per Core Spec. Add heuristics for automatic parameter optimization based on use case (high throughput, low latency, low power). |
-| 5.6 | **HCI vendor command extension** | 🟢 Medium | S | Add a `Command::VendorSpecific { ocf: u16, parameters: &[u8] }` variant and a corresponding event variant to allow applications to send vendor-specific HCI commands (common on nRF and TI controllers). |
-| 5.7 | **Connection supervision timeout event** | 🟢 Medium | S | Handle and expose the `Hardware Error` and `Data Buffer Overflow` events. Provide a callback on `BleHostObserver`. |
-| 5.8 | **Client Characteristic Configuration Descriptor (CCCD) writes** | 🟢 Medium | M | Automatically track notification/indication subscription state from CCCD writes in the GATT server framework. |
-| 5.9 | **Dynamic MTU negotiation** | 🟢 Medium | S | Handle ATT Exchange MTU request/response automatically in the ATT layer. Expose the negotiated MTU to the application. |
+| 5.6 | **HCI vendor command extension** | 🟢 Medium | S | ✅ Done | `Command::VendorSpecific { opcode, parameters }` variant and `cmd_vendor_specific()` on `Hci<H>`. |
+| 5.7 | **Connection supervision timeout event** | 🟢 Medium | S | ⬜ | |
+| 5.8 | **Client Characteristic Configuration Descriptor (CCCD) writes** | 🟢 Medium | M | ✅ Done | GATT server auto-detects CCCD writes (UUID 0x2902), updates subscription state. `is_notify_enabled()`/`is_indicate_enabled()`. |
+| 5.9 | **Dynamic MTU negotiation** | 🟢 Medium | S | ✅ Done | `AttClient` auto-updates MTU on `ExchangeMtuResponse`. |
 | 5.10 | **Power profiling & low-power modes** | 🟢 Low | M | Document power consumption characteristics. Add support for controller sleep modes. Provide examples of duty-cycled advertising and connection intervals for battery-powered peripherals. |
 
 ---
