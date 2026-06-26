@@ -2252,4 +2252,32 @@ mod test {
             expected
         );
     }
+
+    /// Integration test: controller reset, buffer read, BD_ADDR in sequence.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_controller_initialization_flow() {
+        let mock = tokio_test::io::Builder::new()
+            .write(&[1, 3, 12, 0])
+            .read(&[4, 14, 4, 1, 3, 12, 0])
+            .write(&[1, 2, 32, 0])
+            .read(&[4, 14, 7, 1, 2, 32, 0, 0xFB, 0x00, 0x08])
+            .write(&[1, 9, 16, 0])
+            .read(&[4, 14, 10, 1, 9, 16, 0, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55])
+            .build();
+
+        let mut hci = Hci {
+            driver: TokioHciDriver { hci: mock },
+            num_hci_command_packets: 1,
+            le_acl_credits: 0,
+            read_buffer: Default::default(),
+            event_list: Default::default(),
+        };
+
+        hci.cmd_reset().await.unwrap();
+        let (len, packets) = hci.cmd_le_read_buffer_size().await.unwrap();
+        assert_eq!(len, 251);
+        assert_eq!(packets, 8);
+        let addr = hci.cmd_read_bd_addr().await.unwrap();
+        assert_eq!(addr.value(), &[0x00, 0x11, 0x22, 0x33, 0x44, 0x55]);
+    }
 }

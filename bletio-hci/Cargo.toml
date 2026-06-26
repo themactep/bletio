@@ -14,6 +14,7 @@ embassy = ["dep:embassy-time"]
 tokio = ["dep:tokio"]
 defmt = ["dep:defmt", "bletio-utils/defmt"]
 log = ["dep:log", "bletio-utils/log"]
+mock = ["dep:defmt", "dep:log"]
 
 [dependencies]
 bitflags = { workspace = true }
