@@ -9,9 +9,9 @@ use crate::{
     AclData, AdvertisingData, AdvertisingEnable, AdvertisingParameters, Command,
     ConnectionHandle, ConnectionParameters, ConnectionUpdateParameters, Error, ErrorCode, Event,
     EventList, EventMask, EventParameter, FilterDuplicates, HciBuffer, HciDriver, LeEventMask,
-    LeFilterAcceptListAddress, Packet, PublicDeviceAddress, RandomStaticDeviceAddress, Reason,
-    ScanEnable, ScanParameters, SupportedCommands, SupportedFeatures, SupportedLeFeatures,
-    SupportedLeStates, TxPowerLevel, WithTimeout,
+    LeFilterAcceptListAddress, LeMetaEvent, Packet, PublicDeviceAddress,
+    RandomStaticDeviceAddress, Reason, ScanEnable, ScanParameters, SupportedCommands,
+    SupportedFeatures, SupportedLeFeatures, SupportedLeStates, TxPowerLevel, WithTimeout,
 };
 
 const HCI_COMMAND_TIMEOUT: Duration = Duration::from_millis(1000);
@@ -53,6 +53,9 @@ where
 {
     driver: H,
     num_hci_command_packets: u8,
+    /// Available LE ACL data credits. Decremented on send, restored by controller
+    /// via [`LeFlowControlCreditEvent`](crate::LeFlowControlCreditEvent).
+    le_acl_credits: u16,
     read_buffer: HciBuffer,
     event_list: EventList,
 }
@@ -70,9 +73,22 @@ where
         Self {
             driver: hci_driver,
             num_hci_command_packets: 0,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         }
+    }
+
+    /// Set the initial LE ACL credit pool from `cmd_le_read_buffer_size`.
+    ///
+    /// Must be called during setup before any ACL data is sent.
+    pub fn set_le_acl_credits(&mut self, credits: u16) {
+        self.le_acl_credits = credits;
+    }
+
+    /// Return available LE ACL credits.
+    pub fn le_acl_credits(&self) -> u16 {
+        self.le_acl_credits
     }
 
     pub async fn cmd_disconnect(
@@ -445,17 +461,20 @@ where
 
     /// Send an ACL data packet to the controller.
     ///
-    /// The ACL data is encoded into the HCI ACL data packet format and written
-    /// directly to the HCI driver. No command flow control is applied (ACL data
-    /// uses a separate credit-based or buffer-based flow control mechanism).
+    /// Returns an error if no LE ACL credits are available (controller buffers full).
+    /// Credits are obtained from `cmd_le_read_buffer_size` during setup and replenished
+    /// via [`LeFlowControlCreditEvent`](crate::LeFlowControlCreditEvent).
     pub async fn write_acl_data(&mut self, acl_data: &AclData) -> Result<(), Error> {
-        use bletio_utils::{Buffer, BufferOps, EncodeToBuffer};
+        if self.le_acl_credits == 0 {
+            return Err(Error::ErrorCode(crate::ErrorCode::ControllerBusy));
+        }
+        self.le_acl_credits -= 1;
 
+        use bletio_utils::{Buffer, BufferOps, EncodeToBuffer};
         let mut buffer: Buffer<32> = Buffer::default();
         acl_data
             .encode(&mut buffer)
             .map_err(|_| Error::DataWillNotFitAclDataPacket)?;
-
         self.driver.write(buffer.data()).await?;
         Ok(())
     }
@@ -679,6 +698,12 @@ where
         Ok((remaining, hci_packet))
     }
 
+    /// Update both command packet credits and LE ACL credits from an event.
+    fn apply_event_side_effects(&mut self, event: &Event) {
+        Self::update_num_hci_command_packets(&mut self.num_hci_command_packets, event);
+        Self::update_le_acl_credits(&mut self.le_acl_credits, event);
+    }
+
     fn update_num_hci_command_packets(num_hci_command_packets: &mut u8, event: &Event) {
         match event {
             Event::CommandComplete(event) => {
@@ -687,8 +712,15 @@ where
             Event::CommandStatus(event) => {
                 *num_hci_command_packets = event.num_hci_command_packets;
             }
-            _ => {
-                // Ignore other events
+            _ => {}
+        }
+    }
+
+    /// Update LE ACL credits from events (e.g. Flow Control Credit).
+    fn update_le_acl_credits(le_acl_credits: &mut u16, event: &Event) {
+        if let Event::LeMeta(LeMetaEvent::LeFlowControlCredit(credit_event)) = event {
+            for &(_, credits) in &credit_event.entries {
+                *le_acl_credits = le_acl_credits.saturating_add(credits);
             }
         }
     }
@@ -754,6 +786,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -818,6 +851,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -875,6 +909,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -930,6 +965,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1008,6 +1044,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1081,6 +1118,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1130,6 +1168,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1182,6 +1221,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1237,6 +1277,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1286,6 +1327,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1338,6 +1380,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1393,6 +1436,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1445,6 +1489,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1496,6 +1541,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1537,6 +1583,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1578,6 +1625,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1616,6 +1664,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1671,6 +1720,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1711,6 +1761,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1752,6 +1803,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1799,6 +1851,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1855,6 +1908,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1912,6 +1966,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -1968,6 +2023,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -2020,6 +2076,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };
@@ -2185,6 +2242,7 @@ mod test {
         let mut hci = Hci {
             driver: hci_driver,
             num_hci_command_packets: 1,
+            le_acl_credits: 0,
             read_buffer: Default::default(),
             event_list: Default::default(),
         };

@@ -92,6 +92,8 @@ where
         }
 
         let (le_data_packet_length, num_le_data_packets) = hci.cmd_le_read_buffer_size().await?;
+        // Initialize LE ACL credit pool before converting to NonZeroU16
+        hci.set_le_acl_credits(num_le_data_packets);
         let le_data_packet_length: Result<NonZeroU16, _> = le_data_packet_length.try_into();
         let num_le_data_packets: Result<NonZeroU16, _> = num_le_data_packets.try_into();
         match (le_data_packet_length, num_le_data_packets) {
