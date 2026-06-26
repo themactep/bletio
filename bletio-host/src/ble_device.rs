@@ -121,6 +121,8 @@ where
                     // Ignore invalid HCI packet
                     #[cfg(feature = "defmt")]
                     defmt::warn!("Received invalid HCI packet");
+                    #[cfg(all(feature = "log", not(feature = "defmt")))]
+                    log::warn!("Received invalid HCI packet");
                 }
                 Err(e) => return Err(e),
             }

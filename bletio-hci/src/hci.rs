@@ -340,11 +340,13 @@ where
                             // The Host is not supposed to receive commands, ignore it!
                             #[cfg(feature = "defmt")]
                             defmt::warn!("Received command while waiting for event, ignore it!");
+                            #[cfg(all(feature = "log", not(feature = "defmt")))]
+                            log::warn!("Received command while waiting for event, ignore it!");
                         }
-                        Packet::AclData(_data) => {
-                            #[cfg(feature = "defmt")]
-                            defmt::debug!("Received ACL data packet with data: {:?}", _data);
-                            // TODO
+                        Packet::AclData(data) => {
+                            // INVARIANT: The event list is known to be able to hold this event,
+                            // otherwise we would have returned at the beginning of the loop.
+                            event_list.push(Event::AclData(data)).unwrap();
                         }
                         Packet::Event(event) => {
                             Self::update_num_hci_command_packets(
@@ -412,7 +414,7 @@ where
         match self.execute_command(command).await? {
             Event::CommandStatus(event) if event.status.is_success() => Ok(()),
             Event::CommandStatus(event) => Err(Error::ErrorCode(event.status)),
-            _ => Err(Error::UnexpectedEvent), // Actually, not reachable
+            _ => unreachable!("execute_command already filters for CommandStatus"),
         }
     }
 
@@ -427,8 +429,15 @@ where
                             // The Host is not supposed to receive commands!
                             Some(Err(Error::InvalidPacket))
                         }
-                        Packet::AclData(_) => {
-                            todo!()
+                        Packet::AclData(data) => {
+                            // Buffer ACL data that arrives during command execution.
+                            if self.event_list.push(Event::AclData(data)).is_err() {
+                                #[cfg(feature = "defmt")]
+                                defmt::warn!("HCI event list is full, cannot add more!");
+                                #[cfg(all(feature = "log", not(feature = "defmt")))]
+                                log::warn!("HCI event list is full, cannot add more!");
+                            }
+                            None
                         }
                         Packet::Event(event) => {
                             Self::update_num_hci_command_packets(
@@ -447,8 +456,11 @@ where
                                 {
                                     Some(Ok(event))
                                 }
-                                Event::Unsupported(_) => {
-                                    // Ignore unsupported event
+                                Event::Unsupported(_event_code) => {
+                                    #[cfg(feature = "defmt")]
+                                    defmt::debug!("Received unsupported HCI event code: {}", _event_code);
+                                    #[cfg(all(feature = "log", not(feature = "defmt")))]
+                                    log::debug!("Received unsupported HCI event code: {}", _event_code);
                                     None
                                 }
                                 _ => {
@@ -456,6 +468,8 @@ where
                                     if self.event_list.push(event).is_err() {
                                         #[cfg(feature = "defmt")]
                                         defmt::warn!("HCI event list is full, cannot add more!");
+                                        #[cfg(all(feature = "log", not(feature = "defmt")))]
+                                        log::warn!("HCI event list is full, cannot add more!");
                                     }
                                     None
                                 }
@@ -487,20 +501,25 @@ where
                             // The Host is not supposed to receive commands!
                             return Err(Error::InvalidPacket);
                         }
-                        Packet::AclData(_) => {
-                            // The host is not expecting to receive ACL data now!
-                            return Err(Error::InvalidPacket);
+                        Packet::AclData(data) => {
+                            // Buffer ACL data that arrives during controller readiness wait.
+                            if self.event_list.push(Event::AclData(data)).is_err() {
+                                #[cfg(feature = "defmt")]
+                                defmt::warn!("HCI event list is full, cannot add more!");
+                                #[cfg(all(feature = "log", not(feature = "defmt")))]
+                                log::warn!("HCI event list is full, cannot add more!");
+                            }
                         }
                         Packet::Event(event) => {
                             Self::update_num_hci_command_packets(
                                 &mut self.num_hci_command_packets,
                                 &event,
                             );
-
-                            // INVARIANT: The remaining is known to be shorter than the buffer.
-                            self.read_buffer = remaining.try_into().unwrap();
                         }
                     }
+
+                    // INVARIANT: The remaining is known to be shorter than the buffer.
+                    self.read_buffer = remaining.try_into().unwrap();
                 }
                 Err(e) => {
                     self.read_buffer.clear();

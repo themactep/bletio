@@ -13,6 +13,7 @@ default = ["tokio"]
 embassy = ["bletio-hci/embassy"]
 tokio = ["bletio-hci/tokio"]
 defmt = ["dep:defmt", "bletio-hci/defmt", "bletio-utils/defmt"]
+log = ["dep:log", "bletio-hci/log", "bletio-utils/log"]
 
 [dependencies]
 bitflags = { workspace = true }
@@ -20,6 +21,7 @@ bletio-hci = { path = "../bletio-hci", default-features = false }
 bletio-utils = { path = "../bletio-utils" }
 defmt = { workspace = true, optional = true }
 heapless = { workspace = true }
+log = { workspace = true, optional = true }
 nom = { workspace = true }
 num_enum = { workspace = true }
 

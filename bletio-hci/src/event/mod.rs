@@ -4,7 +4,7 @@ use heapless::Vec;
 use num_enum::{FromPrimitive, IntoPrimitive};
 
 use crate::event::command_status::CommandStatusEvent;
-use crate::{CommandCompleteEvent, DisconnectionCompleteEvent, LeMetaEvent};
+use crate::{AclData, CommandCompleteEvent, DisconnectionCompleteEvent, LeMetaEvent};
 
 pub(crate) mod command_complete;
 pub(crate) mod command_status;
@@ -20,6 +20,7 @@ const EVENT_LIST_NB_EVENTS: usize = 4;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[allow(clippy::large_enum_variant)]
 pub enum Event {
+    AclData(AclData),
     DisconnectionComplete(DisconnectionCompleteEvent),
     CommandComplete(CommandCompleteEvent),
     CommandStatus(CommandStatusEvent),

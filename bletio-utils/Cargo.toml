@@ -11,7 +11,9 @@ categories.workspace = true
 [features]
 default = []
 defmt = ["dep:defmt"]
+log = ["dep:log"]
 
 [dependencies]
 bitflags = { workspace = true }
 defmt = { workspace = true, optional = true }
+log = { workspace = true, optional = true }
