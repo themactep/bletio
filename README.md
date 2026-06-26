@@ -344,7 +344,7 @@ Attribute Profile (GATT).
 |---|------|----------|--------|-------------|
 | 4.1 | **SMP command parsing** | 🟡 High | L | ✅ Done | 11 SMP PDU types: Pairing Request/Response, Confirm, Random, Failed, Encryption Info, Master ID, Identity Info/Address, Signing Info, Security Request. AuthReq, IoCapability, KeyDistribution, PairingFailedReason types. Nom-based parser with roundtrip tests. |
 | 4.2 | **LE Legacy Pairing** | 🟡 High | XL | ✅ Done | Just Works (TK=0) and Passkey Entry (`set_passkey()`). SmpPairing state machine with 4 phases. IO capability matrix documented. |
-| 4.3 | **LE Secure Connections** | 🟢 Medium | XL | ✅ Done | `SmpPdu::PairingPublicKey` and `PairingDhkeyCheck` with parsing/encoding. `SmpCrypto` trait extended with `generate_p256_keypair()`, `p256_dh()`, `f5()`, `f6()` (default implementations return `NotSupported`). `SmpPairingPhase::AwaitingPublicKey` and `AwaitingDhkeyCheck`. Full SC requires a P-256 implementation behind the `SmpCrypto` trait. |
+| 4.3 | **LE Secure Connections** | 🟢 Medium | XL | ⚠️ Scaffolding | `SmpPdu::PairingPublicKey`/`PairingDhkeyCheck` with parsing. `SmpCrypto` trait extended with `generate_p256_keypair()`, `p256_dh()`, `f5()`, `f6()` — all default to `NotSupported`. Phase hooks exist. Production use needs a P-256 implementation behind the trait. |
 | 4.4 | **Bonding & key storage** | 🟢 Medium | L | ✅ Done | `BondStore` trait with `MemoryBondStore` implementation. `Bond` struct holds LTK, EDIV, Rand, IRK, CSRK, peer address. `SmpPairing::generate_keys()` and `build_distribution_pdus()` for post-pairing key distribution. Usage example showing store/load/encrypt flow. |
 
 ---
@@ -353,10 +353,10 @@ Attribute Profile (GATT).
 
 | # | Item | Priority | Effort | Description |
 |---|------|----------|--------|-------------|
-| 5.1 | **LE Extended Advertising** | 🟢 Medium | XL | ✅ Done | `AdvertisingSetHandle` type, `LeExtendedAdvertisingReport` event (BLE 5.0, sub-event 0x0D) with 255-byte payload, PHY/SID/TX power fields. Extended advertising command opcodes registered. Full command implementation available via vendor command infrastructure. |
+| 5.1 | **LE Extended Advertising** | 🟢 Medium | XL | ⚠️ Scaffolding | `AdvertisingSetHandle` type, `LeExtendedAdvertisingReport` event parser, command opcodes registered. Full command encoding (SetExtendedAdvertisingParameters/Data/Enable) not yet implemented — deferred to vendor command path. |
 | 5.2 | **LE Coded PHY (Long Range)** | 🟢 Medium | L | ✅ Done | `LePhy` enum (LE 1M/2M/Coded S8/Coded S2). `LePhyUpdateCompleteEvent` parsing. `cmd_le_read_phy()`, `cmd_le_set_default_phy()`, `cmd_le_set_phy()` on `Hci<H>`. |
-| 5.3 | **LE Isochronous Channels** | 🟢 Low | XL | ✅ Done | Scaffolding: `iso.rs`, 10 command opcodes, 3 event types, ISO types. |
-| 5.4 | **LE Periodic Advertising with Responses (PAwR)** | 🟢 Low | XL | ✅ Done | Scaffolding: 2 command opcodes, PAwR event slot. |
+| 5.3 | **LE Isochronous Channels** | 🟢 Low | XL | ⚠️ Scaffolding | `iso.rs` module, 10 command opcodes, 3 event type structs, ISO types (`CigId`, `CisId`, `CisParams`). ISO packet type already in `PacketType`. Full command/event encoding and ISO data path not yet implemented. |
+| 5.4 | **LE Periodic Advertising with Responses (PAwR)** | 🟢 Low | XL | ⚠️ Scaffolding | 2 command opcodes, PAwR event slot (0x26). Full implementation not yet completed. |
 | 5.5 | **Connection parameter optimization** | 🟢 Medium | M | ✅ Done | `ConnectionProfile` enum with presets: `LowPower` (100–125ms), `Balanced` (25–35ms), `HighThroughput` (8–15ms), `LowLatency` (8–15ms), `Custom`. `to_update_params()` converts profiles to `ConnectionUpdateParameters` with ms→BLE-unit conversion. |
 | 5.6 | **HCI vendor command extension** | 🟢 Medium | S | ✅ Done | `Command::VendorSpecific { opcode, parameters }` variant and `cmd_vendor_specific()` on `Hci<H>`. |
 | 5.7 | **Connection supervision timeout event** | 🟢 Medium | S | ✅ Done | `HardwareErrorEvent` (0x10) and `DataBufferOverflowEvent` (0x1A) parsed and routed to `BleHostObserver` callbacks with automatic logging. |
@@ -370,13 +370,13 @@ Attribute Profile (GATT).
 
 | # | Item | Priority | Effort | Description |
 |---|------|----------|--------|-------------|
-| 6.1 | **Integration tests with virtual controller** | 🟡 High | XL | ✅ Done | Controller initialization flow test using `tokio_test::io::Mock` as a virtual controller. Existing 493 per-command tests already serve as virtual controller tests at the HCI byte level. Full end-to-end flows use the mock infrastructure. |
-| 6.2 | **`bletio` CLI tool** | 🟢 Medium | L | ✅ Done | `bletio-cli` binary with `scan` command. Linux HCI socket driver using raw `AF_BLUETOOTH` sockets with async I/O. |
-| 6.3 | **Usage examples** | 🟡 High | M | ✅ Done | `gatt_server_demo`, `gatt_client_demo`, `smp_pairing_demo` in `bletio-host/examples/`. All compile and run successfully. |
+| 6.1 | **Integration tests with virtual controller** | 🟡 High | XL | ⚠️ Partial | 1 initialization flow test (Reset→BufferSize→BdAddr). 493 per-command unit tests serve as byte-level controller tests. No full end-to-end scenario tests (advertise→connect→pair→GATT). |
+| 6.2 | **`bletio` CLI tool** | 🟢 Medium | L | ⚠️ Partial | `scan` command works on Linux (raw HCI socket, requires `systemctl stop bluetooth`). Tested on Intel BLE 5.4. No connect/read/write/advertise commands yet. |
+| 6.3 | **Usage examples** | 🟡 High | M | ✅ Done | 4 examples: `gatt_server_demo`, `gatt_client_demo`, `smp_pairing_demo`, `full_stack_demo`. All compile and run. |
 | 6.4 | **Platform support matrix** | 🟢 Medium | S | ✅ Done | Documented in README: Linux, macOS, nRF52, ESP32, STM32WB, Raspberry Pi. |
-| 6.5 | **Conformance testing** | 🟢 Low | XL | ✅ Done | PTS test case matrix documented in `conformance.rs`. 22/26 GAP/GATT/SM test cases supported. SC cases need P-256 impl. |
-| 6.6 | **`defmt` / `log` structured event tracing** | 🟢 Low | M | ✅ Done | `bletio_trace!/debug!/info!/warn!/error!` macros dispatching to defmt or log. HCI command/event tracing at `execute_command()`. All existing logging unified via macros. |
-| 6.7 | **Semver-gated releases** | 🟢 Medium | S | Publish to crates.io with proper semver. Set up CI for automated release publishing on tag. |
+| 6.5 | **Conformance testing** | 🟢 Low | XL | ⚠️ Docs only | PTS test case matrix documented in `conformance.rs`. 22/26 GAP/GATT/SM cases listed as expected to pass. No actual PTS tests run (requires hardware + PTS software). |
+| 6.6 | **`defmt` / `log` structured event tracing** | 🟢 Low | M | ✅ Done | `bletio_trace!/debug!/info!/warn!/error!` macros dispatching to defmt or log. HCI command/event tracing at `execute_command()`. |
+| 6.7 | **Semver-gated releases** | 🟢 Medium | S | ⬜ | Deferred — upstream decides publishing strategy. |
 
 ---
 
@@ -398,8 +398,8 @@ Attribute Profile (GATT).
 | 1 | Hardening | ACL todo!(), event list overflow, docs | ~2–3 weeks |
 | 2 | Data plane | ACL send/receive, credit flow control, connection registry | ~3–4 weeks |
 | 3 | ATT & GATT | ATT PDU encoding, GATT client/server, profiles | ~2–3 months |
-| 4 | Security | SMP, LE Legacy Pairing, LE Secure Connections, bonding | ~2–3 months |
-| 5 | Features | Extended advertising, Coded PHY, connection optimization | ~2–4 months |
-| 6 | Developer exp. | Integration tests, examples, CLI, platform matrix | ~2–3 months |
+| 4 | Security | SMP, LE Legacy Pairing, LE Secure Connections, bonding | ~2–3 months | 4.1 ✅ 4.2 ✅ 4.3 ⚠️ scaffolding 4.4 ✅ |
+| 5 | Features | Extended advertising, Coded PHY, connection optimization | ~2–4 months | 8/10 ✅, 5.1/5.3/5.4 ⚠️ scaffolding |
+| 6 | Developer exp. | Integration tests, examples, CLI, platform matrix | ~2–3 months | 4/7 ✅, 6.1/6.2/6.5 ⚠️ partial |
 
 Effort estimates assume single-developer velocity and are rough order-of-magnitude guides.
