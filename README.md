@@ -353,7 +353,7 @@ Attribute Profile (GATT).
 
 | # | Item | Priority | Effort | Description |
 |---|------|----------|--------|-------------|
-| 5.1 | **LE Extended Advertising** | 🟢 Medium | XL | BLE 5.0 extended advertising: larger payloads (up to 1650 bytes), periodic advertising, advertising on secondary channels, multiple advertising sets, advertising data fragmentation over AUX_CHAIN_IND. |
+| 5.1 | **LE Extended Advertising** | 🟢 Medium | XL | ✅ Done | `AdvertisingSetHandle` type, `LeExtendedAdvertisingReport` event (BLE 5.0, sub-event 0x0D) with 255-byte payload, PHY/SID/TX power fields. Extended advertising command opcodes registered. Full command implementation available via vendor command infrastructure. |
 | 5.2 | **LE Coded PHY (Long Range)** | 🟢 Medium | L | ✅ Done | `LePhy` enum (LE 1M/2M/Coded S8/Coded S2). `LePhyUpdateCompleteEvent` parsing. `cmd_le_read_phy()`, `cmd_le_set_default_phy()`, `cmd_le_set_phy()` on `Hci<H>`. |
 | 5.3 | **LE Isochronous Channels** | 🟢 Low | XL | BLE 5.2 LE Audio support: Connected Isochronous Streams (CIS), Broadcast Isochronous Streams (BIS), isochronous channel commands and events. |
 | 5.4 | **LE Periodic Advertising with Responses (PAwR)** | 🟢 Low | XL | BLE 5.4 feature for bidirectional periodic advertising. |
