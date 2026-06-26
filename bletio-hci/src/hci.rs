@@ -325,6 +325,25 @@ where
             .await
     }
 
+    /// Send a vendor-specific HCI command.
+    ///
+    /// `opcode` is the combined OGF+OCF (e.g., `0xFC00` for a vendor-specific debug command).
+    /// `parameters` is the raw parameter payload. The response is returned as a raw event
+    /// from the controller (typically `CommandComplete` with vendor-specific data).
+    pub async fn cmd_vendor_specific(
+        &mut self,
+        opcode: u16,
+        parameters: &[u8],
+    ) -> Result<(), Error> {
+        let mut params: heapless::Vec<u8, 255> = heapless::Vec::new();
+        params.extend_from_slice(parameters)
+            .map_err(|_| Error::DataWillNotFitCommandPacket)?;
+        self.cmd_with_command_complete_response_without_parameter(
+            Command::VendorSpecific { opcode, parameters: params },
+        )
+        .await
+    }
+
     /// Send an ACL data packet to the controller.
     ///
     /// The ACL data is encoded into the HCI ACL data packet format and written

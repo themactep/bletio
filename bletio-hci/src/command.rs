@@ -87,6 +87,9 @@ pub(crate) enum Command {
     ReadLocalSupportedFeatures,
     Reset,
     SetEventMask(EventMask),
+    /// Vendor-specific HCI command. OGF and OCF are combined into `opcode`,
+    /// and `parameters` is the raw parameter bytes.
+    VendorSpecific { opcode: u16, parameters: heapless::Vec<u8, 255> },
     Unsupported(u16),
 }
 
@@ -149,6 +152,14 @@ impl Command {
             Command::SetEventMask(event_mask) => {
                 CommandPacket::new(self.opcode()).encode(event_mask)?
             }
+            Command::VendorSpecific { opcode, parameters } => {
+                let packet = CommandPacket::new(CommandOpCode::Unsupported(*opcode));
+                if !parameters.is_empty() {
+                    packet.append_raw(parameters)?
+                } else {
+                    packet
+                }
+            }
             Command::Unsupported(opcode) => return Err(Error::InvalidCommand(*opcode)),
         })
     }
@@ -187,6 +198,7 @@ impl Command {
             Self::ReadLocalSupportedFeatures => CommandOpCode::ReadLocalSupportedFeatures,
             Self::Reset => CommandOpCode::Reset,
             Self::SetEventMask(_) => CommandOpCode::SetEventMask,
+            Self::VendorSpecific { .. } => CommandOpCode::Unsupported(0),
             Self::Unsupported(opcode) => CommandOpCode::Unsupported(*opcode),
         }
     }
@@ -223,6 +235,15 @@ impl CommandPacket {
         self.buffer.data[HCI_COMMAND_PACKET_LENGTH_OFFSET] +=
             data.encode(&mut self.buffer)
                 .map_err(|_| Error::DataWillNotFitCommandPacket)? as u8;
+        Ok(self)
+    }
+
+    /// Append raw bytes to the command packet parameters.
+    fn append_raw(mut self, data: &[u8]) -> Result<Self, Error> {
+        self.buffer.data[HCI_COMMAND_PACKET_LENGTH_OFFSET] += data.len() as u8;
+        self.buffer
+            .copy_from_slice(data)
+            .map_err(|_| Error::DataWillNotFitCommandPacket)?;
         Ok(self)
     }
 

@@ -67,6 +67,13 @@ impl AttClient {
         self.mtu
     }
 
+    /// Update the MTU from an Exchange MTU response PDU.
+    fn update_mtu_from(&mut self, pdu: &AttPdu) {
+        if let AttPdu::ExchangeMtuResponse { server_rx_mtu } = pdu {
+            self.mtu = *server_rx_mtu;
+        }
+    }
+
     /// Returns true if the client is ready to send a new request.
     pub fn is_ready(&self) -> bool {
         self.state == AttClientState::Idle
@@ -228,6 +235,9 @@ impl AttClient {
         let pdu = super::att_pdu::parser::att_pdu(data)
             .map(|(_, pdu)| pdu)
             .map_err(|_| AttError::InvalidPdu)?;
+
+        // Always update MTU on exchange response, even while idle
+        self.update_mtu_from(&pdu);
 
         match &self.state {
             AttClientState::Idle => {
@@ -487,5 +497,27 @@ mod tests {
         let result = client.receive(buf2.data()).unwrap();
         assert_eq!(result, Some(response2));
         assert!(client.is_ready());
+    }
+
+    #[test]
+    fn test_exchange_mtu_updates_mtu() {
+        let mut client = AttClient::new();
+        assert_eq!(client.mtu(), 23);
+
+        let _req = client.prepare_exchange_mtu(256).unwrap();
+        assert!(!client.is_ready());
+
+        let resp = {
+            use bletio_utils::EncodeToBuffer;
+            let pdu = AttPdu::ExchangeMtuResponse { server_rx_mtu: 128 };
+            let mut buf: Buffer<512> = Buffer::default();
+            pdu.encode(&mut buf).unwrap();
+            let mut v = heapless::Vec::<u8, 512>::new();
+            v.extend_from_slice(buf.data()).unwrap();
+            v
+        };
+        let result = client.receive(&resp).unwrap();
+        assert!(client.is_ready());
+        assert_eq!(client.mtu(), 128);
     }
 }
