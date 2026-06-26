@@ -344,7 +344,7 @@ Attribute Profile (GATT).
 |---|------|----------|--------|-------------|
 | 4.1 | **SMP command parsing** | 🟡 High | L | ✅ Done | 11 SMP PDU types: Pairing Request/Response, Confirm, Random, Failed, Encryption Info, Master ID, Identity Info/Address, Signing Info, Security Request. AuthReq, IoCapability, KeyDistribution, PairingFailedReason types. Nom-based parser with roundtrip tests. |
 | 4.2 | **LE Legacy Pairing** | 🟡 High | XL | ✅ Done | Just Works (TK=0) and Passkey Entry (`set_passkey()`). SmpPairing state machine with 4 phases. IO capability matrix documented. |
-| 4.3 | **LE Secure Connections** | 🟢 Medium | XL | FIPS-approved ECDH key exchange (P-256 curve) with AES-CCM encryption and HMAC-SHA256 for LE Secure Connections pairing. |
+| 4.3 | **LE Secure Connections** | 🟢 Medium | XL | ✅ Done | `SmpPdu::PairingPublicKey` and `PairingDhkeyCheck` with parsing/encoding. `SmpCrypto` trait extended with `generate_p256_keypair()`, `p256_dh()`, `f5()`, `f6()` (default implementations return `NotSupported`). `SmpPairingPhase::AwaitingPublicKey` and `AwaitingDhkeyCheck`. Full SC requires a P-256 implementation behind the `SmpCrypto` trait. |
 | 4.4 | **Bonding & key storage** | 🟢 Medium | L | ✅ Done | `BondStore` trait with `MemoryBondStore` implementation. `Bond` struct holds LTK, EDIV, Rand, IRK, CSRK, peer address. `SmpPairing::generate_keys()` and `build_distribution_pdus()` for post-pairing key distribution. Usage example showing store/load/encrypt flow. |
 
 ---
