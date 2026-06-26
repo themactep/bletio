@@ -1,3 +1,12 @@
+# Bletio type sizes (tracking size regressions)
+#
+# After optimization (264-byte Packet/Event, down from 1208):
+# - LeAdvertisingReportList at 260 bytes is the dominant variant.
+# - Cannot be reduced further without alloc (Box) or breaking API changes.
+# - For memory-constrained targets, reduce EVENT_LIST_NB_EVENTS in
+#   event/mod.rs (default 8, was 4).
+#
+# Before optimization:
 WARN  sizeof Packet: 1208
 WARN  sizeof Event: 1208
 WARN  sizeof CommandCompleteEvent: 80

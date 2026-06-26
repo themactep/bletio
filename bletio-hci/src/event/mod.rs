@@ -19,7 +19,11 @@ pub(crate) mod le_connection_update_complete;
 pub(crate) mod le_meta;
 pub(crate) mod le_phy_update_complete;
 
-const EVENT_LIST_NB_EVENTS: usize = 4;
+/// Number of events that can be buffered before older events are dropped.
+///
+/// Adjust this if you experience event loss under bursty advertising or
+/// connection traffic. Each event is ~264 bytes on the stack.
+const EVENT_LIST_NB_EVENTS: usize = 8;
 
 #[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

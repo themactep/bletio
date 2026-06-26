@@ -15,6 +15,7 @@ use crate::{
 };
 
 const HCI_COMMAND_TIMEOUT: Duration = Duration::from_millis(1000);
+const HCI_RESET_TIMEOUT: Duration = Duration::from_millis(5000);
 
 /// Host-Controller Interface (HCI) for communicating with a BLE controller.
 ///
@@ -352,8 +353,22 @@ where
     }
 
     pub async fn cmd_reset(&mut self) -> Result<(), Error> {
-        self.cmd_with_command_complete_response_without_parameter(Command::Reset)
-            .await
+        if self.num_hci_command_packets == 0 {
+            self.wait_controller_ready().await?;
+        }
+        let event = self
+            .send_command_and_wait_response(Command::Reset)
+            .with_timeout(HCI_RESET_TIMEOUT)
+            .await??;
+        if let Event::CommandComplete(event) = event {
+            if event.status.is_success() {
+                Ok(())
+            } else {
+                Err(Error::ErrorCode(event.status))
+            }
+        } else {
+            Err(Error::UnexpectedEvent)
+        }
     }
 
     pub async fn cmd_set_event_mask(&mut self, event_mask: EventMask) -> Result<(), Error> {
