@@ -105,20 +105,23 @@ Auto-generated from Bluetooth SIG sources:
 - AD Types
 - URI Schemes (provisioned)
 
-### Async Runtime Support
+### Async Runtime & Logging Support
 
-| Feature | Runtime | Use Case |
+| Feature | Purpose | Use Case |
 |---------|---------|----------|
-| `tokio` (default) | Tokio | Linux, macOS, desktop testing |
-| `embassy` | Embassy | Bare-metal embedded (nRF, STM32, ESP32) |
+| `tokio` (default) | Tokio async runtime | Linux, macOS, desktop testing |
+| `embassy` | Embassy async runtime | Bare-metal embedded (nRF, STM32, ESP32) |
+| `defmt` | Defmt logging (embedded) | Wire-format logging for `probe-run`/`probe-rs` |
+| `log` | Standard `log` crate | Desktop/host-platform diagnostics |
 
-Mutually exclusive. Both provide `HciDriver::with_timeout()` via the `WithTimeout` trait.
+`tokio`/`embassy` are mutually exclusive. `defmt`/`log` are mutually exclusive. All provide `HciDriver::with_timeout()` via the `WithTimeout` trait.
 
 ### `no_std` & Embedded
 - Zero heap allocations in core logic
 - `heapless::Vec` for event buffering
 - Const-generic `Buffer<CAP>` for packet construction
 - `defmt` support for embedded logging (`defmt` feature flag)
+- `log` support for host-platform diagnostics (`log` feature flag)
 - `embassy-time` for bare-metal timeouts
 
 ---
@@ -139,6 +142,14 @@ For embedded use with `defmt`:
 ```toml
 bletio-host = { git = "https://github.com/themactep/bletio", default-features = false, features = ["embassy", "defmt"] }
 ```
+
+For desktop use with `log` (instead of `defmt`):
+
+```toml
+bletio-host = { git = "https://github.com/themactep/bletio", features = ["log"] }
+```
+
+`defmt` and `log` are mutually exclusive; `log` is the default when neither is specified.
 
 ### 2. Implement `HciDriver`
 
@@ -268,16 +279,16 @@ concrete, actionable items.
 These items address the highest-priority issues in the current codebase with minimal
 risk to the existing architecture.
 
-| # | Item | Priority | Effort | Description |
-|---|------|----------|--------|-------------|
-| 1.1 | **Fix ACL data `todo!()` panics** | 🔴 Critical | M | Replace `todo!()` in `hci.rs` with proper ACL data buffering and dispatch. Currently, receiving ACL data triggers a panic — this makes the stack unusable for any connected device beyond connection establishment. Paired with a public API for reading received ACL payloads. |
-| 1.2 | **Double-buffer the event list** | 🟡 High | S | The current 4-event `heapless::Vec` silently drops events with only a `defmt::warn!` when full. Under bursty advertising traffic, the scan response can be lost. Either: (a) make the capacity configurable via const generic, (b) implement a ring buffer, or (c) use a double-buffer swap to decouple parsing from consumption. |
-| 1.3 | **Add `log` support as alternative to `defmt`** | 🟡 High | S | When `defmt` is not enabled, warnings and debug messages are completely invisible. Add an optional `log` feature so host-platform users get diagnostics without defmt tooling. |
-| 1.4 | **Document the public API** | 🟡 High | M | Add doc comments with examples to: `BleDevice`, `BleHostObserver`, `BleHost`, `HciDriver`, all builder types, `AdvertisingData`, `FullAdvertisingData`, `AdStruct`, and key AD structure types. Include at least one end-to-end example module. |
-| 1.5 | **Remove `UnexpectedEvent` fallibility** | 🟢 Medium | XS | The `_ => Err(Error::UnexpectedEvent)` branch in `execute_command_with_command_status_response` is marked "not reachable". Replace with `unreachable!()` or a debug assertion to clarify intent. |
-| 1.6 | **Add `Unsupported` event logging** | 🟢 Medium | XS | When the parser encounters an unknown event code (`Event::Unsupported(u8)`), log a warning even without defmt. Add a callback or hook so applications can opt into knowing about unknown events. |
-| 1.7 | **Improve `Packet`/`Event` enum sizes** | 🟢 Medium | S | The `size_of.txt` shows `Packet` was reduced from 1208→264 bytes and `Event` from 1208→264 bytes after a refactor. `LeAdvertisingReportList` at 260 bytes still dominates. Consider `Box<[u8]>` behind an alloc feature, or store advertising report fields unpacked instead of as a nested struct. |
-| 1.8 | **Controller reset timeout** | 🟢 Medium | S | The `cmd_reset()` call during setup has no explicit timeout beyond the 1-second command timeout. A controller reset may take significantly longer. Consider a longer timeout or separate `cmd_reset_with_timeout()`. |
+| # | Item | Priority | Effort | Status | Description |
+|---|------|----------|--------|--------|-------------|
+| 1.1 | **Fix ACL data `todo!()` panics** | 🔴 Critical | M | ✅ Done | Added `Event::AclData(AclData)` variant; ACL data is now buffered in `send_command_and_wait_response`, `wait_for_event`, and `wait_controller_ready` instead of panicking. |
+| 1.2 | **Double-buffer the event list** | 🟡 High | S | ⬜ | Existing 4-event `heapless::Vec` now also carries ACL data; capacity increase deferred until GATT traffic volume demands it. |
+| 1.3 | **Add `log` support as alternative to `defmt`** | 🟡 High | S | ✅ Done | Added `log` 0.4 as optional dependency with `log` feature flag on all three crates. All 5 diagnostic call sites now support both `defmt` and `log`. |
+| 1.4 | **Document the public API** | 🟡 High | M | ⬜ | README covers quick start and architecture; per-item rustdoc to follow in a dedicated pass. |
+| 1.5 | **Remove `UnexpectedEvent` fallibility** | 🟢 Medium | XS | ✅ Done | Replaced `Err(Error::UnexpectedEvent)` in `execute_command_with_command_status_response` with `unreachable!()`. |
+| 1.6 | **Add `Unsupported` event logging** | 🟢 Medium | XS | ✅ Done | Unknown HCI event codes are now logged via `defmt` or `log` instead of being silently dropped. |
+| 1.7 | **Improve `Packet`/`Event` enum sizes** | 🟢 Medium | S | ⬜ | Adding `AclData` (~35 bytes) does not increase max variant size; `LeAdvertisingReportList` (260 bytes) remains the dominant variant. Deferred until memory profiling on target. |
+| 1.8 | **Controller reset timeout** | 🟢 Medium | S | ⬜ | Not yet observed as a problem; can be addressed when a concrete controller exhibits slow reset. |
 
 ---
 
