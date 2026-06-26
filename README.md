@@ -343,7 +343,7 @@ Attribute Profile (GATT).
 | 5.2 | **LE Coded PHY (Long Range)** | 🟢 Medium | L | Support for LE 1M, LE 2M, and LE Coded (S=2, S=8) PHY selection via `LE Set PHY` command. Parse `LE PHY Update Complete` event. |
 | 5.3 | **LE Isochronous Channels** | 🟢 Low | XL | BLE 5.2 LE Audio support: Connected Isochronous Streams (CIS), Broadcast Isochronous Streams (BIS), isochronous channel commands and events. |
 | 5.4 | **LE Periodic Advertising with Responses (PAwR)** | 🟢 Low | XL | BLE 5.4 feature for bidirectional periodic advertising. |
-| 5.5 | **Connection parameter optimization** | 🟢 Medium | M | Implement the connection parameter update request procedure per Core Spec. Add heuristics for automatic parameter optimization based on use case (high throughput, low latency, low power). |
+| 5.5 | **Connection parameter optimization** | 🟢 Medium | M | ✅ Done | `ConnectionProfile` enum with presets: `LowPower` (100–125ms), `Balanced` (25–35ms), `HighThroughput` (8–15ms), `LowLatency` (8–15ms), `Custom`. `to_update_params()` converts profiles to `ConnectionUpdateParameters` with ms→BLE-unit conversion. |
 | 5.6 | **HCI vendor command extension** | 🟢 Medium | S | ✅ Done | `Command::VendorSpecific { opcode, parameters }` variant and `cmd_vendor_specific()` on `Hci<H>`. |
 | 5.7 | **Connection supervision timeout event** | 🟢 Medium | S | ⬜ | |
 | 5.8 | **Client Characteristic Configuration Descriptor (CCCD) writes** | 🟢 Medium | M | ✅ Done | GATT server auto-detects CCCD writes (UUID 0x2902), updates subscription state. `is_notify_enabled()`/`is_indicate_enabled()`. |
