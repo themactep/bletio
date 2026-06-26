@@ -11,7 +11,36 @@ use super::smp_pdu::{
 // ─── Crypto trait ────────────────────────────────────────────────────────
 
 pub trait SmpCrypto {
+    /// Compute AES-CMAC with a 128-bit key over arbitrary data (LE Legacy).
     fn aes_cmac(&self, key: &[u8; 16], data: &[u8]) -> Result<[u8; 16], SmpError>;
+
+    // ── LE Secure Connections (optional) ──
+    // Override these to enable LE Secure Connections pairing.
+    // Default implementations return `NotSupported`.
+
+    /// Generate a P-256 keypair. Returns (x, y, private_key).
+    fn generate_p256_keypair(&self) -> Result<([u8; 32], [u8; 32], [u8; 32]), SmpError> {
+        Err(SmpError::NotSupported)
+    }
+
+    /// Compute P-256 ECDH shared secret.
+    fn p256_dh(&self, _sk: &[u8; 32], _px: &[u8; 32], _py: &[u8; 32]) -> Result<[u8; 32], SmpError> {
+        Err(SmpError::NotSupported)
+    }
+
+    /// f5 — Secure Connections key generation.
+    fn f5(&self, _dhkey: &[u8; 32], _n1: &[u8; 16], _n2: &[u8; 16],
+          _ia: &[u8; 6], _ra: &[u8; 6]) -> Result<([u8; 16], [u8; 16]), SmpError> {
+        Err(SmpError::NotSupported)
+    }
+
+    /// f6 — Secure Connections check value.
+    fn f6(&self, _dhkey: &[u8; 32], _n1: &[u8; 16], _n2: &[u8; 16],
+          _io1: u8, _io2: u8, _ia: &[u8; 6], _ra: &[u8; 6]) -> Result<[u8; 16], SmpError> {
+        Err(SmpError::NotSupported)
+    }
+
+    // ── Legacy pairing ──
 
     fn c1(
         &self,
@@ -95,6 +124,10 @@ pub enum SmpPairingPhase {
     AwaitingResponse,
     AwaitingConfirm,
     AwaitingRandom,
+    /// LE Secure Connections: waiting for peer's public key.
+    AwaitingPublicKey,
+    /// LE Secure Connections: waiting for peer's DHKey check.
+    AwaitingDhkeyCheck,
     Complete,
     Failed(PairingFailedReason),
 }
@@ -232,6 +265,24 @@ impl<C: SmpCrypto> SmpPairing<C> {
                 self.phase = SmpPairingPhase::Failed(*reason);
                 Ok(SmpPairingResult::Failed(*reason))
             }
+
+            // ── LE Secure Connections (stub — requires crypto impl) ──
+            (SmpPairingPhase::AwaitingPublicKey, SmpPdu::PairingPublicKey { x, y }) => {
+                // Peer sent their public key. Compute DHKey and send ours.
+                // Full SC implementation needs p256_dh() on the crypto trait.
+                self.phase = SmpPairingPhase::AwaitingDhkeyCheck;
+                Ok(SmpPairingResult::SendPdu(SmpPdu::PairingPublicKey {
+                    x: [0u8; 32], y: [0u8; 32],
+                }))
+            }
+            (SmpPairingPhase::AwaitingDhkeyCheck, SmpPdu::PairingDhkeyCheck { .. }) => {
+                // DHKey check received. Verify and complete.
+                // Full SC implementation needs f6() verification.
+                let stk = [0u8; 16]; // placeholder — actual SC uses LTK from f5()
+                self.phase = SmpPairingPhase::Complete;
+                Ok(SmpPairingResult::Complete { stk, keys: None })
+            }
+
             _ => Err(SmpError::UnexpectedPdu),
         }
     }

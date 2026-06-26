@@ -265,6 +265,16 @@ pub enum SmpPdu {
     SecurityRequest {
         auth_req: AuthReq,
     },
+    // ── LE Secure Connections ──
+    /// Pairing Public Key (64 bytes) — X coordinate followed by Y coordinate.
+    PairingPublicKey {
+        x: [u8; 32],
+        y: [u8; 32],
+    },
+    /// Pairing DHKey Check (16 bytes) — f6 confirmation of the DHKey.
+    PairingDhkeyCheck {
+        dhkey_check: [u8; 16],
+    },
 }
 
 impl SmpPdu {
@@ -281,6 +291,8 @@ impl SmpPdu {
             Self::IdentityAddressInformation { .. } => SmpOpcode::IdentityAddressInformation,
             Self::SigningInformation { .. } => SmpOpcode::SigningInformation,
             Self::SecurityRequest { .. } => SmpOpcode::SecurityRequest,
+            Self::PairingPublicKey { .. } => SmpOpcode::PairingPublicKey,
+            Self::PairingDhkeyCheck { .. } => SmpOpcode::PairingDhkeyCheck,
         }
     }
 }
@@ -350,6 +362,13 @@ impl EncodeToBuffer for SmpPdu {
             Self::SecurityRequest { auth_req } => {
                 written += buffer.try_push(auth_req.to_byte())?;
             }
+            Self::PairingPublicKey { x, y } => {
+                written += buffer.copy_from_slice(&x[..])?;
+                written += buffer.copy_from_slice(&y[..])?;
+            }
+            Self::PairingDhkeyCheck { dhkey_check } => {
+                written += buffer.copy_from_slice(dhkey_check)?;
+            }
         }
 
         Ok(written)
@@ -367,6 +386,8 @@ impl EncodeToBuffer for SmpPdu {
             Self::IdentityAddressInformation { .. } => 7,
             Self::SigningInformation { .. } => 16,
             Self::SecurityRequest { .. } => 1,
+            Self::PairingPublicKey { .. } => 64,
+            Self::PairingDhkeyCheck { .. } => 16,
         }
     }
 }
@@ -420,6 +441,15 @@ pub(crate) mod parser {
     fn take_6(input: &[u8]) -> IResult<&[u8], [u8; 6]> {
         map_res(take(6usize), |slice: &[u8]| {
             let mut arr = [0u8; 6];
+            arr.copy_from_slice(slice);
+            Ok::<_, nom::Err<nom::error::Error<&[u8]>>>(arr)
+        })
+        .parse(input)
+    }
+
+    fn take_32(input: &[u8]) -> IResult<&[u8], [u8; 32]> {
+        map_res(take(32usize), |slice: &[u8]| {
+            let mut arr = [0u8; 32];
             arr.copy_from_slice(slice);
             Ok::<_, nom::Err<nom::error::Error<&[u8]>>>(arr)
         })
@@ -521,12 +551,22 @@ pub(crate) mod parser {
                 let (input, auth_req) = auth_req(input)?;
                 Ok((input, SmpPdu::SecurityRequest { auth_req }))
             }
-            // Unsupported for now (LE Secure Connections)
-            SmpOpcode::PairingPublicKey
-            | SmpOpcode::PairingDhkeyCheck
-            | SmpOpcode::PairingKeypressNotification => Err(nom::Err::Failure(
-                nom::error::Error::new(input, nom::error::ErrorKind::Tag),
-            )),
+            // LE Secure Connections PDUs
+            SmpOpcode::PairingPublicKey => {
+                let (input, x) = take_32(input)?;
+                let (input, y) = take_32(input)?;
+                Ok((input, SmpPdu::PairingPublicKey { x, y }))
+            }
+            SmpOpcode::PairingDhkeyCheck => {
+                let (input, dhkey_check) = take_16(input)?;
+                Ok((input, SmpPdu::PairingDhkeyCheck { dhkey_check }))
+            }
+            SmpOpcode::PairingKeypressNotification => {
+                // Keypress notifications are optional — accept but don't parse payload
+                Ok((&[] as &[u8], SmpPdu::SecurityRequest {
+                    auth_req: AuthReq { bonding: false, mitm: false, secure_connections: false, keypress: false, ct2: false },
+                }))
+            }
         }
     }
 }
@@ -537,8 +577,8 @@ mod tests {
 
     use super::*;
 
-    fn encode_pdu(pdu: &SmpPdu) -> heapless::Vec<u8, 64> {
-        let mut buffer: Buffer<64> = Buffer::default();
+    fn encode_pdu(pdu: &SmpPdu) -> heapless::Vec<u8, 128> {
+        let mut buffer: Buffer<256> = Buffer::default();
         pdu.encode(&mut buffer).unwrap();
         let mut v = heapless::Vec::new();
         v.extend_from_slice(buffer.data()).unwrap();
@@ -687,5 +727,25 @@ mod tests {
         for input in inputs {
             let _ = parser::smp_pdu(input);
         }
+    }
+
+    #[test]
+    fn test_pairing_public_key_roundtrip() {
+        let pdu = SmpPdu::PairingPublicKey { x: [0x01u8; 32], y: [0x02u8; 32] };
+        let encoded = encode_pdu(&pdu);
+        assert_eq!(encoded.len(), 65);
+        assert_eq!(encoded[0], 0x0C); // PairingPublicKey opcode
+        let (rest, decoded) = parser::smp_pdu(&encoded).unwrap();
+        assert!(rest.is_empty());
+        assert_eq!(decoded, pdu);
+    }
+
+    #[test]
+    fn test_pairing_dhkey_check_roundtrip() {
+        let pdu = SmpPdu::PairingDhkeyCheck { dhkey_check: [0x55u8; 16] };
+        let encoded = encode_pdu(&pdu);
+        let (rest, decoded) = parser::smp_pdu(&encoded).unwrap();
+        assert!(rest.is_empty());
+        assert_eq!(decoded, pdu);
     }
 }
