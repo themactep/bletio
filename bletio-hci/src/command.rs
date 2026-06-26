@@ -54,6 +54,15 @@ pub(crate) enum CommandOpCode {
     LeReadPhy = opcode(LE_CONTROLLER_OGF, 0x0030),
     LeSetDefaultPhy = opcode(LE_CONTROLLER_OGF, 0x0031),
     LeSetPhy = opcode(LE_CONTROLLER_OGF, 0x0032),
+    // Extended Advertising (BLE 5.0)
+    LeSetExtendedAdvertisingParameters = opcode(LE_CONTROLLER_OGF, 0x0036),
+    LeSetExtendedAdvertisingData = opcode(LE_CONTROLLER_OGF, 0x0037),
+    LeSetExtendedScanResponseData = opcode(LE_CONTROLLER_OGF, 0x0038),
+    LeSetExtendedAdvertisingEnable = opcode(LE_CONTROLLER_OGF, 0x0039),
+    LeReadMaximumAdvertisingDataLength = opcode(LE_CONTROLLER_OGF, 0x003A),
+    LeReadNumberOfSupportedAdvertisingSets = opcode(LE_CONTROLLER_OGF, 0x003B),
+    LeRemoveAdvertisingSet = opcode(LE_CONTROLLER_OGF, 0x003C),
+    LeClearAdvertisingSets = opcode(LE_CONTROLLER_OGF, 0x003D),
     #[num_enum(catch_all)]
     Unsupported(u16),
 }
@@ -409,6 +418,17 @@ pub(crate) mod parser {
                     let (rest, (all_phys, tx_phys, rx_phys)) = (le_u8, le_u8, le_u8).parse(rest)?;
                     let (_, phy_options) = le_u16(rest)?;
                     Command::LeSetPhy { connection_handle, all_phys, tx_phys, rx_phys, phy_options }
+                }
+                // Extended Advertising commands — parsed as vendor-like for now
+                CommandOpCode::LeSetExtendedAdvertisingParameters
+                | CommandOpCode::LeSetExtendedAdvertisingData
+                | CommandOpCode::LeSetExtendedScanResponseData
+                | CommandOpCode::LeSetExtendedAdvertisingEnable
+                | CommandOpCode::LeReadMaximumAdvertisingDataLength
+                | CommandOpCode::LeReadNumberOfSupportedAdvertisingSets
+                | CommandOpCode::LeRemoveAdvertisingSet
+                | CommandOpCode::LeClearAdvertisingSets => {
+                    Command::Unsupported(command_opcode.into())
                 }
                 CommandOpCode::Unsupported(opcode) => Command::Unsupported(opcode),
             }),

@@ -33,6 +33,7 @@ pub use acl_data::{AclData, BroadcastFlag, PacketBoundaryFlag};
 pub use advertising::{
     advertising_data::AdvertisingData,
     advertising_enable::AdvertisingEnable,
+    extended::AdvertisingSetHandle,
     advertising_parameters::{
         advertising_interval_range, AdvertisingChannelMap, AdvertisingFilterPolicy,
         AdvertisingInterval, AdvertisingIntervalRange, AdvertisingParameters, AdvertisingType,
@@ -83,6 +84,7 @@ pub use event::{
     },
     le_connection_complete::{CentralClockAccuracy, LeConnectionCompleteEvent, Role},
     le_connection_update_complete::LeConnectionUpdateCompleteEvent,
+    le_extended_advertising_report::LeExtendedAdvertisingReport,
     le_meta::LeMetaEvent,
     le_phy_update_complete::{LePhy, LePhyUpdateCompleteEvent},
     Event, EventList,

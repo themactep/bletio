@@ -434,6 +434,14 @@ pub(crate) mod parser {
             | CommandOpCode::LeReadPhy
             | CommandOpCode::LeSetDefaultPhy
             | CommandOpCode::LeSetPhy
+            | CommandOpCode::LeSetExtendedAdvertisingParameters
+            | CommandOpCode::LeSetExtendedAdvertisingData
+            | CommandOpCode::LeSetExtendedScanResponseData
+            | CommandOpCode::LeSetExtendedAdvertisingEnable
+            | CommandOpCode::LeReadMaximumAdvertisingDataLength
+            | CommandOpCode::LeReadNumberOfSupportedAdvertisingSets
+            | CommandOpCode::LeRemoveAdvertisingSet
+            | CommandOpCode::LeClearAdvertisingSets
             | CommandOpCode::Unsupported(_) => {
                 return Err(nom::Err::Failure(nom::error::Error::new(
                     return_parameters,

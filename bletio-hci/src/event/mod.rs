@@ -16,6 +16,7 @@ pub(crate) mod hardware_error;
 pub(crate) mod le_advertising_report;
 pub(crate) mod le_connection_complete;
 pub(crate) mod le_connection_update_complete;
+pub(crate) mod le_extended_advertising_report;
 pub(crate) mod le_flow_control_credit;
 pub(crate) mod le_meta;
 pub(crate) mod le_phy_update_complete;
