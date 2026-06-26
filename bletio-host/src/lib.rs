@@ -11,6 +11,7 @@ pub mod ble_host;
 pub mod power;
 pub mod smp;
 pub mod bond_store;
+pub mod conformance;
 pub mod connection_parameters;
 pub mod connection_registry;
 pub mod connection_update_parameters;
