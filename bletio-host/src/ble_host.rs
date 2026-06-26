@@ -3,9 +3,10 @@ use core::num::NonZeroU16;
 use core::ops::Deref;
 
 use bletio_hci::{
-    ConnectionHandle, ConnectionPeerAddress, DisconnectionCompleteEvent, EventList, EventMask,
-    FilterDuplicates, Hci, HciDriver, LeAdvertisingReportEventType, LeConnectionCompleteEvent,
-    LeConnectionUpdateCompleteEvent, LeEventMask, LeFilterAcceptListAddress, PublicDeviceAddress,
+    AclData, BroadcastFlag, ConnectionHandle, ConnectionPeerAddress, DisconnectionCompleteEvent,
+    EventList, EventMask, FilterDuplicates, Hci, HciDriver, LeAdvertisingReportEventType,
+    LeConnectionCompleteEvent, LeConnectionUpdateCompleteEvent, LeEventMask,
+    LeFilterAcceptListAddress, PacketBoundaryFlag, PublicDeviceAddress,
     RandomStaticDeviceAddress, Reason, Rssi, ScanEnable, SupportedCommands, SupportedFeatures,
     SupportedLeFeatures, SupportedLeStates,
 };
@@ -347,6 +348,27 @@ where
         Ok(())
     }
 
+    /// Send an ACL data packet on the given connection.
+    ///
+    /// The `data` payload must not exceed the controller's LE ACL data packet length
+    /// (available via [`supported_le_features`](Self::supported_le_features)).
+    /// Fragmentation into multiple packets (if needed) is the caller's responsibility.
+    pub async fn send_acl_data(
+        &mut self,
+        connection_handle: ConnectionHandle,
+        data: &[u8],
+    ) -> Result<(), Error> {
+        let acl = AclData::build(
+            connection_handle,
+            PacketBoundaryFlag::FirstNonAutomaticallyFlushablePacket,
+            BroadcastFlag::PointToPoint,
+            data,
+        )
+        .map_err(bletio_hci::Error::from)?;
+        self.hci.write_acl_data(&acl).await?;
+        Ok(())
+    }
+
     pub async fn update_connection(
         &mut self,
         connection_update_parameters: ConnectionUpdateParameters,
@@ -368,6 +390,27 @@ where
         reason: Reason,
     ) -> Result<(), Error> {
         self.hci.cmd_disconnect(connection_handle, reason).await?;
+        Ok(())
+    }
+
+    /// Send an ACL data packet on the given connection.
+    ///
+    /// The `data` payload must not exceed the controller's LE ACL data packet length
+    /// (available via [`supported_le_features`](Self::supported_le_features)).
+    /// Fragmentation into multiple packets (if needed) is the caller's responsibility.
+    pub async fn send_acl_data(
+        &mut self,
+        connection_handle: ConnectionHandle,
+        data: &[u8],
+    ) -> Result<(), Error> {
+        let acl = AclData::build(
+            connection_handle,
+            PacketBoundaryFlag::FirstNonAutomaticallyFlushablePacket,
+            BroadcastFlag::PointToPoint,
+            data,
+        )
+        .map_err(bletio_hci::Error::from)?;
+        self.hci.write_acl_data(&acl).await?;
         Ok(())
     }
 
@@ -464,6 +507,18 @@ where
 }
 
 pub trait BleHostObserver {
+    #[allow(unused_variables)]
+    fn acl_data_received<'a, H>(
+        &self,
+        host: BleHostStates<'a, H>,
+        acl_data: &AclData,
+    ) -> impl core::future::Future<Output = BleHostStates<'a, H>>
+    where
+        H: HciDriver,
+    {
+        async { host }
+    }
+
     #[allow(unused_variables)]
     fn advertising_report_received<'a, H>(
         &self,

@@ -1,9 +1,9 @@
-use bletio_utils::{Buffer, BufferOps};
+use bletio_utils::{Buffer, BufferOps, EncodeToBuffer, Error as UtilsError};
 use num_enum::TryFromPrimitive;
 
-use crate::{ConnectionHandle, Error};
+use crate::{ConnectionHandle, Error, PacketType};
 
-const ACL_DATA_MAX_SIZE: usize = 27;
+pub(crate) const ACL_DATA_MAX_SIZE: usize = 27;
 
 /// Packet boundary flag of an ACL data packet.
 ///
@@ -68,6 +68,71 @@ impl AclData {
             .copy_from_slice(data)
             .map_err(|_| Error::DataWillNotFitAclDataPacket)?;
         Ok(s)
+    }
+
+    /// The connection handle this ACL data is associated with.
+    pub fn handle(&self) -> ConnectionHandle {
+        self.handle
+    }
+
+    /// The packet boundary flag (start/continuation of an L2CAP PDU).
+    pub fn packet_boundary_flag(&self) -> PacketBoundaryFlag {
+        self.packet_boundary_flag
+    }
+
+    /// The broadcast flag (point-to-point or broadcast).
+    pub fn broadcast_flag(&self) -> BroadcastFlag {
+        self.broadcast_flag
+    }
+
+    /// The ACL payload data.
+    pub fn data(&self) -> &[u8] {
+        self.data.data()
+    }
+
+    /// Length of the ACL payload.
+    pub fn data_len(&self) -> usize {
+        self.data.len()
+    }
+
+    /// Build an ACL data packet for sending.
+    pub fn build(
+        handle: ConnectionHandle,
+        packet_boundary_flag: PacketBoundaryFlag,
+        broadcast_flag: BroadcastFlag,
+        data: &[u8],
+    ) -> Result<Self, Error> {
+        Self::try_new(handle, packet_boundary_flag, broadcast_flag, data)
+    }
+}
+
+impl EncodeToBuffer for AclData {
+    fn encode<B: BufferOps>(&self, buffer: &mut B) -> Result<usize, UtilsError> {
+        // Encode the HCI ACL data header: Connection Handle + PB Flag + BC Flag (2 bytes)
+        let handle_flags: u16 = self.handle.value()
+            | ((self.packet_boundary_flag as u16) << 12)
+            | ((self.broadcast_flag as u16) << 14);
+        let mut written = 0;
+
+        // Packet type
+        buffer.try_push(PacketType::AclData as u8)?;
+        written += 1;
+
+        // Connection handle + flags
+        written += buffer.encode_le_u16(handle_flags)?;
+
+        // Data total length
+        written += buffer.encode_le_u16(self.data.len() as u16)?;
+
+        // Payload data
+        written += buffer.copy_from_slice(self.data())?;
+
+        Ok(written)
+    }
+
+    fn encoded_size(&self) -> usize {
+        // Packet Type (1) + Handle+Flags (2) + Data Length (2) + Payload
+        5 + self.data.len()
     }
 }
 

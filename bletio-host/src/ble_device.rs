@@ -85,6 +85,11 @@ where
                         !matches!(e, Event::LeMeta(LeMetaEvent::LeAdvertisingReport(_)))
                     }) {
                         match event {
+                            Event::AclData(acl_data) => {
+                                host = self
+                                    .notify_acl_data_received(host, acl_data)
+                                    .await?;
+                            }
                             Event::DisconnectionComplete(disconnection_complete_event) => {
                                 host = self
                                     .notify_disconnection_complete(
@@ -127,6 +132,17 @@ where
                 Err(e) => return Err(e),
             }
         }
+    }
+
+    pub async fn notify_acl_data_received<H>(
+        &self,
+        host: BleHostStates<'a, H>,
+        acl_data: &bletio_hci::AclData,
+    ) -> Result<BleHostStates<H>, Error>
+    where
+        H: HciDriver,
+    {
+        Ok(self.observer.acl_data_received(host, acl_data).await)
     }
 
     pub async fn notify_disconnection_complete<H>(

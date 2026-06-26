@@ -4,9 +4,9 @@ use core::{
 };
 
 use crate::{
-    AdvertisingData, AdvertisingEnable, AdvertisingParameters, Command, ConnectionHandle,
-    ConnectionParameters, ConnectionUpdateParameters, Error, ErrorCode, Event, EventList,
-    EventMask, EventParameter, FilterDuplicates, HciBuffer, HciDriver, LeEventMask,
+    AclData, AdvertisingData, AdvertisingEnable, AdvertisingParameters, Command,
+    ConnectionHandle, ConnectionParameters, ConnectionUpdateParameters, Error, ErrorCode, Event,
+    EventList, EventMask, EventParameter, FilterDuplicates, HciBuffer, HciDriver, LeEventMask,
     LeFilterAcceptListAddress, Packet, PublicDeviceAddress, RandomStaticDeviceAddress, Reason,
     ScanEnable, ScanParameters, SupportedCommands, SupportedFeatures, SupportedLeFeatures,
     SupportedLeStates, TxPowerLevel, WithTimeout,
@@ -323,6 +323,23 @@ where
     pub async fn cmd_set_event_mask(&mut self, event_mask: EventMask) -> Result<(), Error> {
         self.cmd_with_command_complete_response_without_parameter(Command::SetEventMask(event_mask))
             .await
+    }
+
+    /// Send an ACL data packet to the controller.
+    ///
+    /// The ACL data is encoded into the HCI ACL data packet format and written
+    /// directly to the HCI driver. No command flow control is applied (ACL data
+    /// uses a separate credit-based or buffer-based flow control mechanism).
+    pub async fn write_acl_data(&mut self, acl_data: &AclData) -> Result<(), Error> {
+        use bletio_utils::{Buffer, BufferOps, EncodeToBuffer};
+
+        let mut buffer: Buffer<32> = Buffer::default();
+        acl_data
+            .encode(&mut buffer)
+            .map_err(|_| Error::DataWillNotFitAclDataPacket)?;
+
+        self.driver.write(buffer.data()).await?;
+        Ok(())
     }
 
     pub async fn wait_for_event(&mut self) -> Result<EventList, Error> {
