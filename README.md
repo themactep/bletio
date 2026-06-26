@@ -361,19 +361,19 @@ Attribute Profile (GATT).
 | 6.3 | **Usage examples** | 🟡 High | M | ✅ Done | `gatt_server_demo`, `gatt_client_demo`, `smp_pairing_demo` in `bletio-host/examples/`. All compile and run successfully. |
 | 6.4 | **Platform support matrix** | 🟢 Medium | S | Document and CI-test against: nRF52840, nRF5340, ESP32-C3, STM32WB, Raspberry Pi (via `hciattach`), and Linux HCI sockets. |
 | 6.5 | **Conformance testing** | 🟢 Low | XL | Run against Bluetooth SIG qualification test suite (PTS) where feasible. Document PTS test results for qualification. |
-| 6.6 | **`defmt` / `log` structured event tracing** | 🟢 Low | M | Emit structured events (not just free-text) for all state transitions, HCI command/event exchanges, and GATT operations. Enable post-mortem analysis of BLE interactions. |
+| 6.6 | **`defmt` / `log` structured event tracing** | 🟢 Low | M | ✅ Done | `bletio_trace!/debug!/info!/warn!/error!` macros dispatching to defmt or log. HCI command/event tracing at `execute_command()`. All existing logging unified via macros. |
 | 6.7 | **Semver-gated releases** | 🟢 Medium | S | Publish to crates.io with proper semver. Set up CI for automated release publishing on tag. |
 
 ---
 
 ### Ongoing
 
-| # | Item | Description |
-|---|------|-------------|
-| O.1 | **Keep assigned numbers current** | Run `update-assigned-numbers` periodically (or via CI scheduled job) to sync with Bluetooth SIG updates for company IDs, service UUIDs, and appearance values. |
-| O.2 | **Security audit** | The daily `cargo-deny` audit is already in place. Add `cargo-audit` for RustSec advisory database checks. |
-| O.3 | **MSRV policy** | Document and CI-test a Minimum Supported Rust Version. The project uses edition 2021 and stable features only. |
-| O.4 | **Fuzz testing** | Add fuzz targets for the nom parsers (HCI packets, advertising data, ATT PDUs) using `cargo-fuzz` or `afl.rs`. Parsers are the primary attack surface. |
+| # | Item | Status | Description |
+|---|------|--------|-------------|
+| O.1 | **Keep assigned numbers current** | ✅ Done | Scheduled CI job updates assigned numbers weekly. |
+| O.2 | **Security audit** | ⬜ | Daily `cargo-deny` in place; add `cargo-audit` for RustSec. |
+| O.3 | **MSRV policy** | ✅ Done | `rust-version = "1.75"`, CI job. |
+| O.4 | **Fuzz testing** | ✅ Done | Fuzz tests for HCI, ATT, and SMP parsers. |
 
 ---
 
