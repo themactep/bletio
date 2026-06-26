@@ -340,12 +340,12 @@ Attribute Profile (GATT).
 | # | Item | Priority | Effort | Description |
 |---|------|----------|--------|-------------|
 | 5.1 | **LE Extended Advertising** | 🟢 Medium | XL | BLE 5.0 extended advertising: larger payloads (up to 1650 bytes), periodic advertising, advertising on secondary channels, multiple advertising sets, advertising data fragmentation over AUX_CHAIN_IND. |
-| 5.2 | **LE Coded PHY (Long Range)** | 🟢 Medium | L | Support for LE 1M, LE 2M, and LE Coded (S=2, S=8) PHY selection via `LE Set PHY` command. Parse `LE PHY Update Complete` event. |
+| 5.2 | **LE Coded PHY (Long Range)** | 🟢 Medium | L | ✅ Done | `LePhy` enum (LE 1M/2M/Coded S8/Coded S2). `LePhyUpdateCompleteEvent` parsing. `cmd_le_read_phy()`, `cmd_le_set_default_phy()`, `cmd_le_set_phy()` on `Hci<H>`. |
 | 5.3 | **LE Isochronous Channels** | 🟢 Low | XL | BLE 5.2 LE Audio support: Connected Isochronous Streams (CIS), Broadcast Isochronous Streams (BIS), isochronous channel commands and events. |
 | 5.4 | **LE Periodic Advertising with Responses (PAwR)** | 🟢 Low | XL | BLE 5.4 feature for bidirectional periodic advertising. |
 | 5.5 | **Connection parameter optimization** | 🟢 Medium | M | ✅ Done | `ConnectionProfile` enum with presets: `LowPower` (100–125ms), `Balanced` (25–35ms), `HighThroughput` (8–15ms), `LowLatency` (8–15ms), `Custom`. `to_update_params()` converts profiles to `ConnectionUpdateParameters` with ms→BLE-unit conversion. |
 | 5.6 | **HCI vendor command extension** | 🟢 Medium | S | ✅ Done | `Command::VendorSpecific { opcode, parameters }` variant and `cmd_vendor_specific()` on `Hci<H>`. |
-| 5.7 | **Connection supervision timeout event** | 🟢 Medium | S | ⬜ | |
+| 5.7 | **Connection supervision timeout event** | 🟢 Medium | S | ✅ Done | `HardwareErrorEvent` (0x10) and `DataBufferOverflowEvent` (0x1A) parsed and routed to `BleHostObserver` callbacks with automatic logging. |
 | 5.8 | **Client Characteristic Configuration Descriptor (CCCD) writes** | 🟢 Medium | M | ✅ Done | GATT server auto-detects CCCD writes (UUID 0x2902), updates subscription state. `is_notify_enabled()`/`is_indicate_enabled()`. |
 | 5.9 | **Dynamic MTU negotiation** | 🟢 Medium | S | ✅ Done | `AttClient` auto-updates MTU on `ExchangeMtuResponse`. |
 | 5.10 | **Power profiling & low-power modes** | 🟢 Low | M | ✅ Done | `PowerEstimator` with advertising/connected current draw and battery life estimates. `BatteryCapacity` presets (CR2032, Li-Po, etc.), `AdvertisingPowerProfile` presets (Aggressive through ExtremePowerSaving). `PowerProfile` for custom controller characteristics. |
