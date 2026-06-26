@@ -105,6 +105,8 @@ mod test {
 
     use super::*;
 
+    mod e2e_tests;
+
     pub(crate) struct TokioHciDriver<H>
     where
         H: tokio::io::AsyncRead + tokio::io::AsyncWrite,
