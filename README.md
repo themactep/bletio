@@ -317,7 +317,7 @@ Attribute Profile (GATT).
 |---|------|----------|--------|--------|-------------|
 | 3.1 | **ATT PDU encoding/decoding** | 🔴 Critical | L | ✅ Done | 16 ATT PDU types implemented with `EncodeToBuffer` serialization and nom-based zero-copy parsing. Supports Error Response, Exchange MTU, Find Information, Read By Type/Group Type, Read/Read Blob, Write Request/Command, Handle Value Notification/Indication/Confirmation. Supporting types: `AttHandle`, `AttValue`, `AttUuid`, `AttError`, `AttErrorCode`, `AttOpcode`. |
 | 3.2 | **ATT client state machine** | 🔴 Critical | XL | ✅ Done | Synchronous request-response state machine (`AttClient`) with one-outstanding-request tracking. Methods: `prepare_exchange_mtu`, `prepare_read_by_group_type`, `prepare_read_by_type`, `prepare_read`, `prepare_read_blob`, `prepare_write_request`, `prepare_write_command`, `prepare_notification`, `prepare_indication`. `receive()` matches incoming ACL data to pending responses. Returns `EncodedAttPdu` for sending over ACL. |
-| 3.3 | **GATT discovery procedures** | 🔴 Critical | L | ⬜ | |
+| 3.3 | **GATT discovery procedures** | 🔴 Critical | L | ✅ Done | `GattClient` with `discover_all_primary_services()`, `discover_characteristics()`, `discover_descriptors()`. Handles continuation across multiple Read By Group Type/Type responses. Parses 16-bit and 128-bit UUIDs. `Attribute Not Found` error automatically terminates discovery. |
 | 3.4 | **GATT client read/write operations** | 🟡 High | M | ⬜ | |
 | 3.5 | **GATT server framework** | 🟡 High | XL | ⬜ | |
 | 3.6 | **GATT profiles** | 🟢 Medium | XL | ⬜ | |
