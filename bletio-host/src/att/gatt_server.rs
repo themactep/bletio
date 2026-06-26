@@ -86,6 +86,8 @@ pub struct GattServer {
     attributes: Vec<Attribute, MAX_ATTRIBUTES>,
     /// Next available handle for attribute assignment.
     next_handle: u16,
+    /// CCCD subscription state: (characteristic_value_handle, notifications_enabled, indications_enabled).
+    cccd_state: Vec<(AttHandle, bool, bool), 16>,
 }
 
 impl GattServer {
@@ -94,6 +96,7 @@ impl GattServer {
         Self {
             attributes: Vec::new(),
             next_handle: 1,
+            cccd_state: Vec::new(),
         }
     }
 
@@ -124,6 +127,38 @@ impl GattServer {
     /// Get the value of an attribute at the given handle.
     pub fn get_value(&self, handle: AttHandle) -> Option<&AttValue> {
         self.find_attribute(handle).map(|a| &a.value)
+    }
+
+    /// Check if notifications are enabled for the characteristic at the given value handle.
+    pub fn is_notify_enabled(&self, char_value_handle: AttHandle) -> bool {
+        self.cccd_state
+            .iter()
+            .any(|&(h, notify, _)| h == char_value_handle && notify)
+    }
+
+    /// Check if indications are enabled for the characteristic at the given value handle.
+    pub fn is_indicate_enabled(&self, char_value_handle: AttHandle) -> bool {
+        self.cccd_state
+            .iter()
+            .any(|&(h, _, indicate)| h == char_value_handle && indicate)
+    }
+
+    /// Update CCCD state when a client writes to a CCCD descriptor.
+    /// The CCCD handle controls the characteristic with value handle = cccd_handle - 1.
+    fn update_cccd(&mut self, cccd_handle: AttHandle, value: &[u8]) -> Result<(), AttError> {
+        if value.len() < 2 {
+            return Err(AttError::InvalidPdu);
+        }
+        let notify = (value[0] & 0x01) != 0;
+        let indicate = (value[0] & 0x02) != 0;
+
+        // The characteristic value handle is one before the CCCD descriptor
+        let char_handle = AttHandle(cccd_handle.0.saturating_sub(1));
+
+        // Remove existing entry for this char handle, then insert updated state
+        self.cccd_state.retain(|&(h, _, _)| h != char_handle);
+        let _ = self.cccd_state.push((char_handle, notify, indicate));
+        Ok(())
     }
 
     /// Allocate a new handle.
@@ -225,7 +260,7 @@ impl GattServer {
     /// This implements the server-side logic for all standard ATT requests.
     /// The caller is responsible for encoding the response and sending it
     /// over ACL.
-    pub fn handle_request(&self, request: &AttPdu) -> Result<AttPdu, AttError> {
+    pub fn handle_request(&mut self, request: &AttPdu) -> Result<AttPdu, AttError> {
         match request {
             AttPdu::ExchangeMtuRequest { client_rx_mtu } => {
                 // Accept MTU exchange (server_rx_mtu = min(517, client_rx_mtu))
@@ -500,7 +535,7 @@ impl GattServer {
     }
 
     fn handle_write(
-        &self,
+        &mut self,
         handle: AttHandle,
         value: &AttValue,
         with_response: bool,
@@ -508,6 +543,20 @@ impl GattServer {
         let attr = self
             .find_attribute(handle)
             .ok_or_else(|| AttError::InvalidHandle)?;
+
+        // Check if this is a CCCD write
+        if attr.attribute_type == AttUuid::Uuid16(CLIENT_CHAR_CONFIG_UUID) {
+            self.update_cccd(handle, value.as_slice())?;
+            // Also update the attribute value so reads reflect the current state
+            if let Some(attr_mut) = self.find_attribute_mut(handle) {
+                attr_mut.value = value.clone();
+            }
+            if with_response {
+                return Ok(AttPdu::WriteResponse);
+            } else {
+                return Err(AttError::InvalidPdu); // Write command doesn't get a response
+            }
+        }
 
         let allowed = if with_response {
             attr.permissions.write
@@ -836,7 +885,7 @@ mod tests {
 
     #[test]
     fn test_empty_server() {
-        let server = GattServer::new();
+        let mut server = GattServer::new();
         assert_eq!(server.attribute_count(), 0);
         assert!(server.find_attribute(AttHandle(1)).is_none());
     }
@@ -913,7 +962,7 @@ mod tests {
 
     #[test]
     fn test_handle_exchange_mtu() {
-        let server = GattServer::new();
+        let mut server = GattServer::new();
         let req = AttPdu::ExchangeMtuRequest { client_rx_mtu: 256 };
         let resp = server.handle_request(&req).unwrap();
         assert_eq!(
@@ -1090,5 +1139,91 @@ mod tests {
 
         // Write Command returns Err (no response expected)
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_cccd_write_enables_notifications() {
+        let mut server = GattServer::new();
+
+        let svc = GattServiceBuilder::new(AttUuid::Uuid16(0x180F))
+            .add_characteristic(
+                GattCharacteristicBuilder::new(AttUuid::Uuid16(0x2A19))
+                    .readable()
+                    .notifiable()
+                    .value(&[100u8]).unwrap()
+                    .add_descriptor(
+                        GattDescriptorBuilder::new(AttUuid::Uuid16(CLIENT_CHAR_CONFIG_UUID))
+                            .readable()
+                            .writable()
+                            .value(&[0x00, 0x00]).unwrap()
+                            .build(),
+                    )
+                    .build(),
+            )
+            .build();
+        server.add_service(svc).unwrap();
+
+        // CCCD is at handle 4 (svc=1, char_decl=2, char_value=3, cccd=4)
+        assert!(!server.is_notify_enabled(AttHandle(3)));
+        assert!(!server.is_indicate_enabled(AttHandle(3)));
+
+        // Write 0x0001 to CCCD → enable notifications
+        let req = AttPdu::WriteRequest {
+            attribute_handle: AttHandle(4),
+            attribute_value: AttValue::new(&[0x01, 0x00]).unwrap(),
+        };
+        let resp = server.handle_request(&req).unwrap();
+        assert_eq!(resp, AttPdu::WriteResponse);
+
+        assert!(server.is_notify_enabled(AttHandle(3)));
+        assert!(!server.is_indicate_enabled(AttHandle(3)));
+
+        // Write 0x0002 to CCCD → enable indications
+        let req = AttPdu::WriteRequest {
+            attribute_handle: AttHandle(4),
+            attribute_value: AttValue::new(&[0x02, 0x00]).unwrap(),
+        };
+        server.handle_request(&req).unwrap();
+        assert!(!server.is_notify_enabled(AttHandle(3)));
+        assert!(server.is_indicate_enabled(AttHandle(3)));
+    }
+
+    #[test]
+    fn test_cccd_read_reflects_state() {
+        let mut server = GattServer::new();
+
+        let svc = GattServiceBuilder::new(AttUuid::Uuid16(0x180F))
+            .add_characteristic(
+                GattCharacteristicBuilder::new(AttUuid::Uuid16(0x2A19))
+                    .notifiable()
+                    .value(&[100u8]).unwrap()
+                    .add_descriptor(
+                        GattDescriptorBuilder::new(AttUuid::Uuid16(CLIENT_CHAR_CONFIG_UUID))
+                            .readable()
+                            .writable()
+                            .value(&[0x00, 0x00]).unwrap()
+                            .build(),
+                    )
+                    .build(),
+            )
+            .build();
+        server.add_service(svc).unwrap();
+
+        // Write notifications enabled
+        server.handle_request(&AttPdu::WriteRequest {
+            attribute_handle: AttHandle(4),
+            attribute_value: AttValue::new(&[0x01, 0x00]).unwrap(),
+        }).unwrap();
+
+        // Read back the CCCD value
+        let resp = server.handle_request(&AttPdu::ReadRequest {
+            attribute_handle: AttHandle(4),
+        }).unwrap();
+        match resp {
+            AttPdu::ReadResponse { attribute_value } => {
+                assert_eq!(attribute_value.as_slice(), &[0x01, 0x00]);
+            }
+            _ => panic!("Expected ReadResponse"),
+        }
     }
 }
