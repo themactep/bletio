@@ -12,6 +12,10 @@ pub enum LeMetaEvent {
     LePhyUpdateComplete(crate::event::le_phy_update_complete::LePhyUpdateCompleteEvent),
     LeFlowControlCredit(crate::event::le_flow_control_credit::LeFlowControlCreditEvent),
     LeExtendedAdvertisingReport(crate::event::le_extended_advertising_report::LeExtendedAdvertisingReport),
+    /// BLE 5.2+ isochronous events (CIS/BIG).
+    IsochronousUnsupported(u8),
+    /// BLE 5.4 PAwR events.
+    PawrUnsupported(u8),
     Unsupported(u8),
 }
 
@@ -25,6 +29,12 @@ enum LeMetaEventCode {
     LePhyUpdateComplete = 0x0C,
     LeExtendedAdvertisingReport = 0x0D,
     LeFlowControlCredit = 0x0E,
+    // Isochronous Channels (BLE 5.2)
+    LeCisEstablished = 0x19,
+    LeCisRequest = 0x1A,
+    LeBigInfoAdvertisingReport = 0x22,
+    // PAwR (BLE 5.4)
+    LePeriodicAdvertisingResponseReport = 0x26,
     #[num_enum(catch_all)]
     Unsupported(u8),
 }
@@ -60,6 +70,15 @@ pub(crate) mod parser {
             }
             LeMetaEventCode::LeExtendedAdvertisingReport => {
                 le_extended_advertising_report_event(parameters)
+            }
+            // Isochronous/PAwR events — parsed as unsupported for now
+            LeMetaEventCode::LeCisEstablished
+            | LeMetaEventCode::LeCisRequest
+            | LeMetaEventCode::LeBigInfoAdvertisingReport => {
+                Ok((&[], LeMetaEvent::IsochronousUnsupported(u8::from(le_meta_event_code))))
+            }
+            LeMetaEventCode::LePeriodicAdvertisingResponseReport => {
+                Ok((&[], LeMetaEvent::PawrUnsupported(u8::from(le_meta_event_code))))
             }
             LeMetaEventCode::Unsupported(event_code) => {
                 Ok((&[], LeMetaEvent::Unsupported(event_code)))

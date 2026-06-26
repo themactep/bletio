@@ -442,6 +442,17 @@ pub(crate) mod parser {
             | CommandOpCode::LeReadNumberOfSupportedAdvertisingSets
             | CommandOpCode::LeRemoveAdvertisingSet
             | CommandOpCode::LeClearAdvertisingSets
+            | CommandOpCode::LeSetCigParameters
+            | CommandOpCode::LeCreateCis
+            | CommandOpCode::LeRemoveCig
+            | CommandOpCode::LeAcceptCisRequest
+            | CommandOpCode::LeRejectCisRequest
+            | CommandOpCode::LeCreateBig
+            | CommandOpCode::LeTerminateBig
+            | CommandOpCode::LeSetupIsoDataPath
+            | CommandOpCode::LeRemoveIsoDataPath
+            | CommandOpCode::LeSetPeriodicAdvertisingSubeventData
+            | CommandOpCode::LeSetPeriodicAdvertisingResponseData
             | CommandOpCode::Unsupported(_) => {
                 return Err(nom::Err::Failure(nom::error::Error::new(
                     return_parameters,

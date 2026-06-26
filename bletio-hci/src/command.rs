@@ -63,6 +63,19 @@ pub(crate) enum CommandOpCode {
     LeReadNumberOfSupportedAdvertisingSets = opcode(LE_CONTROLLER_OGF, 0x003B),
     LeRemoveAdvertisingSet = opcode(LE_CONTROLLER_OGF, 0x003C),
     LeClearAdvertisingSets = opcode(LE_CONTROLLER_OGF, 0x003D),
+    // Isochronous Channels (BLE 5.2)
+    LeSetCigParameters = opcode(LE_CONTROLLER_OGF, 0x0062),
+    LeCreateCis = opcode(LE_CONTROLLER_OGF, 0x0064),
+    LeRemoveCig = opcode(LE_CONTROLLER_OGF, 0x0065),
+    LeAcceptCisRequest = opcode(LE_CONTROLLER_OGF, 0x0066),
+    LeRejectCisRequest = opcode(LE_CONTROLLER_OGF, 0x0067),
+    LeCreateBig = opcode(LE_CONTROLLER_OGF, 0x0068),
+    LeTerminateBig = opcode(LE_CONTROLLER_OGF, 0x006A),
+    LeSetupIsoDataPath = opcode(LE_CONTROLLER_OGF, 0x006E),
+    LeRemoveIsoDataPath = opcode(LE_CONTROLLER_OGF, 0x006F),
+    // Periodic Advertising with Responses — PAwR (BLE 5.4)
+    LeSetPeriodicAdvertisingSubeventData = opcode(LE_CONTROLLER_OGF, 0x0072),
+    LeSetPeriodicAdvertisingResponseData = opcode(LE_CONTROLLER_OGF, 0x0073),
     #[num_enum(catch_all)]
     Unsupported(u16),
 }
@@ -427,7 +440,18 @@ pub(crate) mod parser {
                 | CommandOpCode::LeReadMaximumAdvertisingDataLength
                 | CommandOpCode::LeReadNumberOfSupportedAdvertisingSets
                 | CommandOpCode::LeRemoveAdvertisingSet
-                | CommandOpCode::LeClearAdvertisingSets => {
+                | CommandOpCode::LeClearAdvertisingSets
+                | CommandOpCode::LeSetCigParameters
+                | CommandOpCode::LeCreateCis
+                | CommandOpCode::LeRemoveCig
+                | CommandOpCode::LeAcceptCisRequest
+                | CommandOpCode::LeRejectCisRequest
+                | CommandOpCode::LeCreateBig
+                | CommandOpCode::LeTerminateBig
+                | CommandOpCode::LeSetupIsoDataPath
+                | CommandOpCode::LeRemoveIsoDataPath
+                | CommandOpCode::LeSetPeriodicAdvertisingSubeventData
+                | CommandOpCode::LeSetPeriodicAdvertisingResponseData => {
                     Command::Unsupported(command_opcode.into())
                 }
                 CommandOpCode::Unsupported(opcode) => Command::Unsupported(opcode),
