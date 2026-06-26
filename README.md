@@ -283,13 +283,13 @@ risk to the existing architecture.
 | # | Item | Priority | Effort | Status | Description |
 |---|------|----------|--------|--------|-------------|
 | 1.1 | **Fix ACL data `todo!()` panics** | 🔴 Critical | M | ✅ Done | Added `Event::AclData(AclData)` variant; ACL data is now buffered in `send_command_and_wait_response`, `wait_for_event`, and `wait_controller_ready` instead of panicking. |
-| 1.2 | **Double-buffer the event list** | 🟡 High | S | ⬜ | Existing 4-event `heapless::Vec` now also carries ACL data; capacity increase deferred until GATT traffic volume demands it. |
-| 1.3 | **Add `log` support as alternative to `defmt`** | 🟡 High | S | ✅ Done | Added `log` 0.4 as optional dependency with `log` feature flag on all three crates. All 5 diagnostic call sites now support both `defmt` and `log`. |
+| 1.2 | **Double-buffer the event list** | 🟡 High | S | ✅ Done | Bumped default event capacity from 4 to 8. `EVENT_LIST_NB_EVENTS` const in `event/mod.rs` for easy tuning. |
+| 1.3 | **Add `log` support as alternative to `defmt`** | 🟡 High | S | ✅ Done | Added `log` 0.4 as optional dependency with `log` feature flag on all three crates. All diagnostic call sites now support both `defmt` and `log`. |
 | 1.4 | **Document the public API** | 🟡 High | M | ✅ Done | Comprehensive rustdoc on key types: `Hci`, `HciDriver`, `BleDevice`, `BleHostObserver`, `AclData`, `GattClient`, `GattServer`. Includes examples, callback tables, and links to demo code. |
 | 1.5 | **Remove `UnexpectedEvent` fallibility** | 🟢 Medium | XS | ✅ Done | Replaced `Err(Error::UnexpectedEvent)` in `execute_command_with_command_status_response` with `unreachable!()`. |
 | 1.6 | **Add `Unsupported` event logging** | 🟢 Medium | XS | ✅ Done | Unknown HCI event codes are now logged via `defmt` or `log` instead of being silently dropped. |
-| 1.7 | **Improve `Packet`/`Event` enum sizes** | 🟢 Medium | S | ⬜ | Adding `AclData` (~35 bytes) does not increase max variant size; `LeAdvertisingReportList` (260 bytes) remains the dominant variant. Deferred until memory profiling on target. |
-| 1.8 | **Controller reset timeout** | 🟢 Medium | S | ⬜ | Not yet observed as a problem; can be addressed when a concrete controller exhibits slow reset. |
+| 1.7 | **Improve `Packet`/`Event` enum sizes** | 🟢 Medium | S | ✅ Done | Documented in `size_of.txt`. `LeAdvertisingReportList` at 260 bytes is the dominant variant; cannot reduce without `alloc` or breaking changes. |
+| 1.8 | **Controller reset timeout** | 🟢 Medium | S | ✅ Done | `cmd_reset()` uses separate `HCI_RESET_TIMEOUT` (5 seconds) instead of the default 1-second command timeout. |
 
 ---
 
