@@ -289,10 +289,7 @@ impl AttClient {
         pdu
             .encode(&mut buffer)
             .map_err(|_| AttError::ValueTooLong)?;
-        Ok(EncodedAttPdu {
-            data: buffer,
-            len: pdu.encoded_size(),
-        })
+        Ok(EncodedAttPdu::from_buffer(buffer, pdu.encoded_size()))
     }
 }
 
@@ -311,6 +308,11 @@ pub struct EncodedAttPdu {
 }
 
 impl EncodedAttPdu {
+    /// Create a new encoded PDU from a Buffer and its logical length.
+    pub(crate) fn from_buffer(data: Buffer<512>, len: usize) -> Self {
+        Self { data, len }
+    }
+
     /// Returns the raw bytes of the encoded PDU.
     pub fn as_bytes(&self) -> &[u8] {
         &self.data.data()[..self.len]

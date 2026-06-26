@@ -3,8 +3,10 @@
 //! Implements Generic Attribute Profile discovery procedures per
 //! [Core Specification 6.0, Vol. 3, Part G](https://www.bluetooth.com/specifications/specs/core-specification-6-0/).
 
+use bletio_utils::{Buffer, EncodeToBuffer};
+
 use super::att_client::{AttClient, EncodedAttPdu};
-use super::att_pdu::{AttError, AttHandle, AttOpcode, AttPdu, AttUuid};
+use super::att_pdu::{AttError, AttHandle, AttOpcode, AttPdu, AttUuid, AttValue};
 
 /// UUID for the Primary Service declaration (0x2800).
 const PRIMARY_SERVICE_UUID: u16 = 0x2800;
@@ -84,9 +86,15 @@ enum GattState {
         descriptors: heapless::Vec<GattDescriptor, 32>,
         next_start: Option<AttHandle>,
     },
+    /// Awaiting a Read Response for a characteristic or descriptor.
+    ReadingValue { handle: AttHandle },
+    /// Awaiting a Write Response acknowledgment.
+    WritingValue { handle: AttHandle },
+    /// Awaiting a Handle Value Confirmation after sending an indication response.
+    AwaitingIndicationConfirmation,
 }
 
-/// Events produced by the GATT client during discovery.
+/// Events produced by the GATT client during discovery and read/write operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum GattEvent {
@@ -96,6 +104,25 @@ pub enum GattEvent {
     CharacteristicsDiscovered(heapless::Vec<GattCharacteristic, 32>),
     /// A list of discovered descriptors for a characteristic.
     DescriptorsDiscovered(heapless::Vec<GattDescriptor, 32>),
+    /// A characteristic or descriptor value was read.
+    ValueRead {
+        handle: AttHandle,
+        value: AttValue,
+    },
+    /// A characteristic value was written (acknowledged by server).
+    ValueWritten {
+        handle: AttHandle,
+    },
+    /// A notification was received from the server.
+    Notification {
+        handle: AttHandle,
+        value: AttValue,
+    },
+    /// An indication was received from the server and confirmation was sent.
+    Indication {
+        handle: AttHandle,
+        value: AttValue,
+    },
 }
 
 /// GATT client that drives ATT for discovery and read/write operations.
@@ -223,14 +250,36 @@ impl GattClient {
                 GattState::DiscoveringDescriptors { descriptors, .. } => {
                     Some(GattEvent::DescriptorsDiscovered(descriptors.clone()))
                 }
-                GattState::Idle => None,
+                GattState::Idle
+                | GattState::ReadingValue { .. }
+                | GattState::WritingValue { .. }
+                | GattState::AwaitingIndicationConfirmation => None,
             };
             self.state = GattState::Idle;
             return Ok(event);
         }
 
         match &self.state {
-            GattState::Idle => Ok(None),
+            GattState::Idle => match response {
+                AttPdu::HandleValueNotification {
+                    attribute_handle,
+                    attribute_value,
+                } => Ok(Some(GattEvent::Notification {
+                    handle: attribute_handle,
+                    value: attribute_value,
+                })),
+                AttPdu::HandleValueIndication {
+                    attribute_handle,
+                    attribute_value,
+                } => {
+                    self.state = GattState::AwaitingIndicationConfirmation;
+                    Ok(Some(GattEvent::Indication {
+                        handle: attribute_handle,
+                        value: attribute_value,
+                    }))
+                }
+                _ => Ok(None),
+            },
             GattState::DiscoveringServices {
                 start,
                 end,
@@ -309,6 +358,85 @@ impl GattClient {
                     Ok(Some(GattEvent::DescriptorsDiscovered(descs)))
                 }
             }
+            GattState::ReadingValue { handle } => {
+                let (new_state, result) = match response {
+                    AttPdu::ReadResponse { attribute_value } => {
+                        (GattState::Idle, Ok(Some(GattEvent::ValueRead {
+                            handle: *handle,
+                            value: attribute_value,
+                        })))
+                    }
+                    AttPdu::ReadBlobResponse {
+                        part_attribute_value,
+                    } => {
+                        (GattState::Idle, Ok(Some(GattEvent::ValueRead {
+                            handle: *handle,
+                            value: part_attribute_value,
+                        })))
+                    }
+                    AttPdu::ErrorResponse { .. } => {
+                        (GattState::Idle, Err(AttError::UnexpectedPdu {
+                            expected: AttOpcode::ReadResponse as u8,
+                            received: AttOpcode::ErrorResponse as u8,
+                        }))
+                    }
+                    _ => {
+                        (GattState::Idle, Err(AttError::UnexpectedPdu {
+                            expected: AttOpcode::ReadResponse as u8,
+                            received: response.opcode() as u8,
+                        }))
+                    }
+                };
+                self.state = new_state;
+                result
+            }
+            GattState::WritingValue { handle } => {
+                let (new_state, result) = match response {
+                    AttPdu::WriteResponse => {
+                        (GattState::Idle, Ok(Some(GattEvent::ValueWritten {
+                            handle: *handle,
+                        })))
+                    }
+                    AttPdu::ErrorResponse { .. } => {
+                        (GattState::Idle, Err(AttError::UnexpectedPdu {
+                            expected: AttOpcode::WriteResponse as u8,
+                            received: AttOpcode::ErrorResponse as u8,
+                        }))
+                    }
+                    _ => {
+                        (GattState::Idle, Err(AttError::UnexpectedPdu {
+                            expected: AttOpcode::WriteResponse as u8,
+                            received: response.opcode() as u8,
+                        }))
+                    }
+                };
+                self.state = new_state;
+                result
+            }
+            GattState::AwaitingIndicationConfirmation => {
+                let result = match response {
+                    AttPdu::HandleValueConfirmation => {
+                        self.state = GattState::Idle;
+                        Ok(None)
+                    }
+                    AttPdu::HandleValueIndication {
+                        attribute_handle,
+                        attribute_value,
+                    } => Ok(Some(GattEvent::Indication {
+                        handle: attribute_handle,
+                        value: attribute_value,
+                    })),
+                    AttPdu::HandleValueNotification {
+                        attribute_handle,
+                        attribute_value,
+                    } => Ok(Some(GattEvent::Notification {
+                        handle: attribute_handle,
+                        value: attribute_value,
+                    })),
+                    _ => Ok(None),
+                };
+                result
+            }
         }
     }
 
@@ -353,8 +481,99 @@ impl GattClient {
                     .prepare_find_information(next, *char_end)
                     .ok()
             }
-            _ => None,
+            GattState::ReadingValue { .. }
+            | GattState::WritingValue { .. }
+            | GattState::AwaitingIndicationConfirmation
+            | GattState::Idle => None,
         }
+    }
+
+    // ── Read / Write operations ───────────────────────────────────────
+
+    /// Prepare a read request for a characteristic value or descriptor.
+    /// Returns the encoded PDU to send over ACL.
+    pub fn read_value(&mut self, handle: AttHandle) -> Result<EncodedAttPdu, AttError> {
+        if !self.is_idle() {
+            return Err(AttError::Timeout);
+        }
+        let encoded = self.att.prepare_read(handle)?;
+        self.state = GattState::ReadingValue { handle };
+        Ok(encoded)
+    }
+
+    /// Prepare a read blob request (long value continuation).
+    pub fn read_blob(
+        &mut self,
+        handle: AttHandle,
+        offset: u16,
+    ) -> Result<EncodedAttPdu, AttError> {
+        if !self.is_idle() {
+            return Err(AttError::Timeout);
+        }
+        let encoded = self.att.prepare_read_blob(handle, offset)?;
+        self.state = GattState::ReadingValue { handle };
+        Ok(encoded)
+    }
+
+    /// Prepare a write request (with acknowledgment).
+    pub fn write_value(
+        &mut self,
+        handle: AttHandle,
+        value: &[u8],
+    ) -> Result<EncodedAttPdu, AttError> {
+        if !self.is_idle() {
+            return Err(AttError::Timeout);
+        }
+        let encoded = self.att.prepare_write_request(handle, value)?;
+        self.state = GattState::WritingValue { handle };
+        Ok(encoded)
+    }
+
+    /// Prepare a write command (no acknowledgment, no state change).
+    pub fn write_value_without_response(
+        &self,
+        handle: AttHandle,
+        value: &[u8],
+    ) -> Result<EncodedAttPdu, AttError> {
+        self.att.prepare_write_command(handle, value)
+    }
+
+    /// Send a Handle Value Confirmation in response to a received indication.
+    pub fn send_confirmation(&mut self) -> Result<EncodedAttPdu, AttError> {
+        let encoded = Self::encode_pdu_static(&AttPdu::HandleValueConfirmation)?;
+        self.state = GattState::AwaitingIndicationConfirmation;
+        Ok(encoded)
+    }
+
+    /// Prepare a notification to send (server-to-client, no acknowledgment).
+    pub fn notify(
+        &self,
+        handle: AttHandle,
+        value: &[u8],
+    ) -> Result<EncodedAttPdu, AttError> {
+        self.att.prepare_notification(handle, value)
+    }
+
+    /// Prepare an indication to send (server-to-client, awaits confirmation).
+    pub fn indicate(
+        &mut self,
+        handle: AttHandle,
+        value: &[u8],
+    ) -> Result<EncodedAttPdu, AttError> {
+        if !self.is_idle() {
+            return Err(AttError::Timeout);
+        }
+        let encoded = self.att.prepare_indication(handle, value)?;
+        self.state = GattState::AwaitingIndicationConfirmation;
+        Ok(encoded)
+    }
+
+    /// Encode a static PDU (one without state changes).
+    fn encode_pdu_static(pdu: &AttPdu) -> Result<EncodedAttPdu, AttError> {
+        let mut buffer: Buffer<512> = Buffer::default();
+        pdu.encode(&mut buffer)
+            .map_err(|_| AttError::ValueTooLong)?;
+        Ok(EncodedAttPdu::from_buffer(buffer, pdu.encoded_size()))
     }
 }
 
@@ -829,6 +1048,133 @@ mod tests {
 
         // No descriptor space when char value handle equals end handle
         let result = gatt.discover_descriptors(AttHandle(0x0010), AttHandle(0x0010));
+        assert!(result.is_err());
+    }
+
+    // ── Read / Write tests ─────────────────────────────────────────────
+
+    fn build_read_response(value: &[u8]) -> heapless::Vec<u8, 512> {
+        let pdu = AttPdu::ReadResponse {
+            attribute_value: AttValue::new(value).unwrap(),
+        };
+        let mut buffer: Buffer<512> = Buffer::default();
+        pdu.encode(&mut buffer).unwrap();
+        let mut v = heapless::Vec::new();
+        v.extend_from_slice(buffer.data()).unwrap();
+        v
+    }
+
+    fn build_write_response() -> heapless::Vec<u8, 512> {
+        let pdu = AttPdu::WriteResponse;
+        let mut buffer: Buffer<512> = Buffer::default();
+        pdu.encode(&mut buffer).unwrap();
+        let mut v = heapless::Vec::new();
+        v.extend_from_slice(buffer.data()).unwrap();
+        v
+    }
+
+    fn build_notification(handle: u16, value: &[u8]) -> heapless::Vec<u8, 512> {
+        let pdu = AttPdu::HandleValueNotification {
+            attribute_handle: AttHandle(handle),
+            attribute_value: AttValue::new(value).unwrap(),
+        };
+        let mut buffer: Buffer<512> = Buffer::default();
+        pdu.encode(&mut buffer).unwrap();
+        let mut v = heapless::Vec::new();
+        v.extend_from_slice(buffer.data()).unwrap();
+        v
+    }
+
+    fn build_indication(handle: u16, value: &[u8]) -> heapless::Vec<u8, 512> {
+        let pdu = AttPdu::HandleValueIndication {
+            attribute_handle: AttHandle(handle),
+            attribute_value: AttValue::new(value).unwrap(),
+        };
+        let mut buffer: Buffer<512> = Buffer::default();
+        pdu.encode(&mut buffer).unwrap();
+        let mut v = heapless::Vec::new();
+        v.extend_from_slice(buffer.data()).unwrap();
+        v
+    }
+
+    fn build_confirmation() -> heapless::Vec<u8, 512> {
+        let pdu = AttPdu::HandleValueConfirmation;
+        let mut buffer: Buffer<512> = Buffer::default();
+        pdu.encode(&mut buffer).unwrap();
+        let mut v = heapless::Vec::new();
+        v.extend_from_slice(buffer.data()).unwrap();
+        v
+    }
+
+    #[test]
+    fn test_read_characteristic_value() {
+        let mut gatt = GattClient::new();
+        assert!(gatt.is_idle());
+
+        let _req = gatt.read_value(AttHandle(0x0003)).unwrap();
+        assert!(!gatt.is_idle());
+
+        let resp = build_read_response(&[0x42, 0x00]);
+        let event = gatt.feed(&resp).unwrap();
+
+        assert!(gatt.is_idle());
+        match event {
+            Some(GattEvent::ValueRead { handle, value }) => {
+                assert_eq!(handle, AttHandle(0x0003));
+                assert_eq!(value.as_slice(), &[0x42, 0x00]);
+            }
+            _ => panic!("Expected ValueRead"),
+        }
+    }
+
+    #[test]
+    fn test_write_characteristic_value() {
+        let mut gatt = GattClient::new();
+
+        let _req = gatt.write_value(AttHandle(0x0012), &[0x01, 0x00]).unwrap();
+        assert!(!gatt.is_idle());
+
+        let resp = build_write_response();
+        let event = gatt.feed(&resp).unwrap();
+
+        assert!(gatt.is_idle());
+        match event {
+            Some(GattEvent::ValueWritten { handle }) => {
+                assert_eq!(handle, AttHandle(0x0012));
+            }
+            _ => panic!("Expected ValueWritten"),
+        }
+    }
+
+    #[test]
+    fn test_write_without_response_is_idempotent() {
+        let gatt = GattClient::new();
+        let _req = gatt.write_value_without_response(AttHandle(0x0012), &[0x01]).unwrap();
+        assert!(gatt.is_idle());
+    }
+
+    #[test]
+    fn test_receive_notification_while_idle() {
+        let mut gatt = GattClient::new();
+
+        let resp = build_notification(0x0015, &[0xDE, 0xAD]);
+        let event = gatt.feed(&resp).unwrap();
+
+        assert!(gatt.is_idle());
+        match event {
+            Some(GattEvent::Notification { handle, value }) => {
+                assert_eq!(handle, AttHandle(0x0015));
+                assert_eq!(value.as_slice(), &[0xDE, 0xAD]);
+            }
+            _ => panic!("Expected Notification"),
+        }
+    }
+
+    #[test]
+    fn test_cannot_start_read_while_busy() {
+        let mut gatt = GattClient::new();
+        gatt.read_value(AttHandle(0x0003)).unwrap();
+        let result = gatt.read_value(AttHandle(0x0004));
         assert!(result.is_err());
     }
 }
