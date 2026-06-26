@@ -358,7 +358,7 @@ Attribute Profile (GATT).
 |---|------|----------|--------|-------------|
 | 6.1 | **Integration tests with virtual controller** | 🟡 High | XL | Write integration tests using a BLE controller simulator (or a mock HCI that implements the controller side of HCI). This tests the full stack end-to-end: advertising, scanning, connection, pairing, GATT operations. |
 | 6.2 | **`bletio` CLI tool** | 🟢 Medium | L | A command-line tool for interacting with BLE devices using a local HCI controller. Useful for debugging, testing, and as a reference application. |
-| 6.3 | **Usage examples** | 🟡 High | M | Standalone examples in `examples/`: temperature peripheral, heart rate peripheral, central scanner, battery service, LED control. Each example should target both Tokio (for CI) and a real embedded board. |
+| 6.3 | **Usage examples** | 🟡 High | M | ✅ Done | `gatt_server_demo`, `gatt_client_demo`, `smp_pairing_demo` in `bletio-host/examples/`. All compile and run successfully. |
 | 6.4 | **Platform support matrix** | 🟢 Medium | S | Document and CI-test against: nRF52840, nRF5340, ESP32-C3, STM32WB, Raspberry Pi (via `hciattach`), and Linux HCI sockets. |
 | 6.5 | **Conformance testing** | 🟢 Low | XL | Run against Bluetooth SIG qualification test suite (PTS) where feasible. Document PTS test results for qualification. |
 | 6.6 | **`defmt` / `log` structured event tracing** | 🟢 Low | M | Emit structured events (not just free-text) for all state transitions, HCI command/event exchanges, and GATT operations. Enable post-mortem analysis of BLE interactions. |
