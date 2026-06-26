@@ -3,6 +3,8 @@ use core::{
     time::Duration,
 };
 
+use bletio_utils::{bletio_debug, bletio_warn};
+
 use crate::{
     AclData, AdvertisingData, AdvertisingEnable, AdvertisingParameters, Command,
     ConnectionHandle, ConnectionParameters, ConnectionUpdateParameters, Error, ErrorCode, Event,
@@ -422,10 +424,7 @@ where
                     match packet {
                         Packet::Command(_) => {
                             // The Host is not supposed to receive commands, ignore it!
-                            #[cfg(feature = "defmt")]
-                            defmt::warn!("Received command while waiting for event, ignore it!");
-                            #[cfg(all(feature = "log", not(feature = "defmt")))]
-                            log::warn!("Received command while waiting for event, ignore it!");
+                            bletio_warn!("Received command while waiting for event, ignore it!");
                         }
                         Packet::AclData(data) => {
                             // INVARIANT: The event list is known to be able to hold this event,
@@ -470,6 +469,7 @@ where
     }
 
     async fn execute_command(&mut self, command: Command) -> Result<Event, Error> {
+        bletio_debug!("HCI send: opcode=0x{:04X}", command.opcode() as u16);
         if self.num_hci_command_packets == 0 {
             self.wait_controller_ready().await?;
         }
@@ -477,6 +477,7 @@ where
             .send_command_and_wait_response(command)
             .with_timeout(HCI_COMMAND_TIMEOUT)
             .await??;
+        bletio_debug!("HCI recv: opcode=0x{:04X}", command.opcode() as u16);
         Ok(event)
     }
 
@@ -516,10 +517,7 @@ where
                         Packet::AclData(data) => {
                             // Buffer ACL data that arrives during command execution.
                             if self.event_list.push(Event::AclData(data)).is_err() {
-                                #[cfg(feature = "defmt")]
-                                defmt::warn!("HCI event list is full, cannot add more!");
-                                #[cfg(all(feature = "log", not(feature = "defmt")))]
-                                log::warn!("HCI event list is full, cannot add more!");
+                                bletio_warn!("HCI event list is full, cannot add more!");
                             }
                             None
                         }
@@ -550,10 +548,7 @@ where
                                 _ => {
                                     // Other events will be handled higher in the stack
                                     if self.event_list.push(event).is_err() {
-                                        #[cfg(feature = "defmt")]
-                                        defmt::warn!("HCI event list is full, cannot add more!");
-                                        #[cfg(all(feature = "log", not(feature = "defmt")))]
-                                        log::warn!("HCI event list is full, cannot add more!");
+                                        bletio_warn!("HCI event list is full, cannot add more!");
                                     }
                                     None
                                 }
@@ -588,10 +583,7 @@ where
                         Packet::AclData(data) => {
                             // Buffer ACL data that arrives during controller readiness wait.
                             if self.event_list.push(Event::AclData(data)).is_err() {
-                                #[cfg(feature = "defmt")]
-                                defmt::warn!("HCI event list is full, cannot add more!");
-                                #[cfg(all(feature = "log", not(feature = "defmt")))]
-                                log::warn!("HCI event list is full, cannot add more!");
+                                bletio_warn!("HCI event list is full, cannot add more!");
                             }
                         }
                         Packet::Event(event) => {

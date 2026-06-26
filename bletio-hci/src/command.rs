@@ -680,4 +680,39 @@ mod test {
         assert_eq!(hci_packet, Packet::Command(command));
         assert!(rest.is_empty());
     }
+
+    // ── Fuzz / property tests ──────────────────────────────────────────
+
+    #[test]
+    fn fuzz_command_parser_no_panic() {
+        // Feed various crafted and random-looking byte sequences to the
+        // command parser. The goal is to ensure no panics or crashes.
+        let inputs: &[&[u8]] = &[
+            // Empty
+            &[],
+            // Too short
+            &[1],
+            &[1, 0],
+            &[1, 0, 0],
+            // Valid header but truncated body
+            &[1, 0, 0, 0],
+            &[1, 0, 0, 10],
+            &[1, 0, 0, 10, 1, 2],
+            // Invalid packet type
+            &[0, 0, 0, 0],
+            &[5, 0, 0, 0],
+            &[0xFF, 0xFF, 0xFF, 0xFF],
+            // Maximum-size header with no body
+            &[1, 0xFF, 0xFF, 255, 0, 0],
+            // Long garbage
+            &[1, 0, 0, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            // All zeros
+            &[0u8; 64],
+            // All 0xFF
+            &[0xFFu8; 64],
+        ];
+        for input in inputs {
+            let _ = packet(input);
+        }
+    }
 }

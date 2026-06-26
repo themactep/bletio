@@ -9,6 +9,7 @@ authors = ["Ghislain MARY <ghislain@ghislainmary.fr>"]
 license = "MIT OR Apache-2.0"
 keywords = ["no-std", "ble", "bluetooth"]
 categories = ["embedded", "no-std"]
+rust-version = "1.75"
 
 [workspace.dependencies]
 approx = "0.5"

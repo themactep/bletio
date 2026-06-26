@@ -674,4 +674,18 @@ mod tests {
         let result = parser::smp_pdu(&[0xFF]);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn fuzz_smp_pdu_parser_no_panic() {
+        let inputs: &[&[u8]] = &[
+            &[], &[0x01], &[0x01, 0x00], &[0x03],
+            &[0x01, 0x03, 0x00, 0x01, 0x10, 0x03, 0x03],
+            &[0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+            &[0xFFu8; 32],
+            &[0u8; 32],
+        ];
+        for input in inputs {
+            let _ = parser::smp_pdu(input);
+        }
+    }
 }

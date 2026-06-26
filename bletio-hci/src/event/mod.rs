@@ -165,4 +165,20 @@ mod test {
         assert!(matches!(packet, Packet::Event(Event::Unsupported(1))));
         assert!(rest.is_empty());
     }
+
+    // ── Fuzz tests ─────────────────────────────────────────────────────
+
+    #[test]
+    fn fuzz_event_parser_no_panic() {
+        let inputs: &[&[u8]] = &[
+            &[], &[4], &[4, 0], &[4, 0, 0],
+            &[4, 0xFF, 0, 0],
+            &[4, 1, 50, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+            &[0xFFu8; 32],
+            &[0u8; 32],
+        ];
+        for input in inputs {
+            let _ = super::parser::event(input);
+        }
+    }
 }

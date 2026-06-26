@@ -931,4 +931,18 @@ mod tests {
         let result = parser::att_pdu(&[0xFF, 0x00]);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn fuzz_att_pdu_parser_no_panic() {
+        let inputs: &[&[u8]] = &[
+            &[], &[0x02], &[0x12, 0, 0], &[0x0A, 0, 0],
+            &[0x1B, 0x00, 0x00],
+            &[0x08, 0x01, 0x00, 0xFF, 0xFF, 0x00, 0x2A],
+            &[0xFFu8; 64],
+            &[0u8; 64],
+        ];
+        for input in inputs {
+            let _ = parser::att_pdu(input);
+        }
+    }
 }

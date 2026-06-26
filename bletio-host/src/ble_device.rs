@@ -3,6 +3,7 @@ use bletio_hci::{
     LeAdvertisingReport, LeAdvertisingReportEventType, LeConnectionCompleteEvent,
     LeConnectionUpdateCompleteEvent, LeMetaEvent,
 };
+use bletio_utils::{bletio_error, bletio_warn};
 
 use crate::advertising::FullAdvertisingData;
 use crate::assigned_numbers::AppearanceValue;
@@ -91,20 +92,14 @@ where
                                     .await?;
                             }
                             Event::DataBufferOverflow(event) => {
-                                #[cfg(feature = "defmt")]
-                                defmt::warn!("Data buffer overflow: link_type={}", event.link_type);
-                                #[cfg(all(feature = "log", not(feature = "defmt")))]
-                                log::warn!("Data buffer overflow: link_type={}", event.link_type);
+                                bletio_warn!("Data buffer overflow: link_type={}", event.link_type);
                                 host = self
                                     .observer
                                     .data_buffer_overflow(host, event)
                                     .await;
                             }
                             Event::HardwareError(event) => {
-                                #[cfg(feature = "defmt")]
-                                defmt::error!("Hardware error: code=0x{:02X}", event.hardware_code);
-                                #[cfg(all(feature = "log", not(feature = "defmt")))]
-                                log::error!("Hardware error: code=0x{:02X}", event.hardware_code);
+                                bletio_error!("Hardware error: code=0x{:02X}", event.hardware_code);
                                 host = self
                                     .observer
                                     .hardware_error(host, event)
@@ -144,10 +139,7 @@ where
                 }
                 Err(Error::Hci(bletio_hci::Error::InvalidPacket)) => {
                     // Ignore invalid HCI packet
-                    #[cfg(feature = "defmt")]
-                    defmt::warn!("Received invalid HCI packet");
-                    #[cfg(all(feature = "log", not(feature = "defmt")))]
-                    log::warn!("Received invalid HCI packet");
+                    bletio_warn!("Received invalid HCI packet");
                 }
                 Err(e) => return Err(e),
             }

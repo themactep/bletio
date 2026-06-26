@@ -3,6 +3,61 @@
 mod bit_flags_array;
 mod buffer;
 
+/// Trace macros for structured event logging.
+///
+/// These dispatch to `defmt` or `log` depending on which feature is enabled.
+/// They provide consistent formatting for HCI command/event exchanges and state
+/// transitions across all bletio crates.
+#[macro_export]
+macro_rules! bletio_trace {
+    ($($arg:tt)*) => {
+        #[cfg(feature = "defmt")]
+        defmt::trace!($($arg)*);
+        #[cfg(all(feature = "log", not(feature = "defmt")))]
+        log::trace!($($arg)*);
+    }
+}
+
+#[macro_export]
+macro_rules! bletio_debug {
+    ($($arg:tt)*) => {
+        #[cfg(feature = "defmt")]
+        defmt::debug!($($arg)*);
+        #[cfg(all(feature = "log", not(feature = "defmt")))]
+        log::debug!($($arg)*);
+    }
+}
+
+#[macro_export]
+macro_rules! bletio_info {
+    ($($arg:tt)*) => {
+        #[cfg(feature = "defmt")]
+        defmt::info!($($arg)*);
+        #[cfg(all(feature = "log", not(feature = "defmt")))]
+        log::info!($($arg)*);
+    }
+}
+
+#[macro_export]
+macro_rules! bletio_warn {
+    ($($arg:tt)*) => {
+        #[cfg(feature = "defmt")]
+        defmt::warn!($($arg)*);
+        #[cfg(all(feature = "log", not(feature = "defmt")))]
+        log::warn!($($arg)*);
+    }
+}
+
+#[macro_export]
+macro_rules! bletio_error {
+    ($($arg:tt)*) => {
+        #[cfg(feature = "defmt")]
+        defmt::error!($($arg)*);
+        #[cfg(all(feature = "log", not(feature = "defmt")))]
+        log::error!($($arg)*);
+    }
+}
+
 pub use bit_flags_array::BitFlagsArray;
 pub use buffer::{Buffer, BufferOps, EncodeToBuffer};
 
