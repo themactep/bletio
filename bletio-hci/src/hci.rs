@@ -91,6 +91,13 @@ where
         self.le_acl_credits
     }
 
+    /// Set the number of available HCI command packets. Call this after
+    /// opening a fresh HCI transport if no initial events have been received.
+    /// Most controllers accept at least 1 command after initialization.
+    pub fn set_num_hci_command_packets(&mut self, n: u8) {
+        self.num_hci_command_packets = n;
+    }
+
     pub async fn cmd_disconnect(
         &mut self,
         connection_handle: ConnectionHandle,
