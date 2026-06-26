@@ -348,7 +348,7 @@ Attribute Profile (GATT).
 | 5.7 | **Connection supervision timeout event** | 🟢 Medium | S | ⬜ | |
 | 5.8 | **Client Characteristic Configuration Descriptor (CCCD) writes** | 🟢 Medium | M | ✅ Done | GATT server auto-detects CCCD writes (UUID 0x2902), updates subscription state. `is_notify_enabled()`/`is_indicate_enabled()`. |
 | 5.9 | **Dynamic MTU negotiation** | 🟢 Medium | S | ✅ Done | `AttClient` auto-updates MTU on `ExchangeMtuResponse`. |
-| 5.10 | **Power profiling & low-power modes** | 🟢 Low | M | Document power consumption characteristics. Add support for controller sleep modes. Provide examples of duty-cycled advertising and connection intervals for battery-powered peripherals. |
+| 5.10 | **Power profiling & low-power modes** | 🟢 Low | M | ✅ Done | `PowerEstimator` with advertising/connected current draw and battery life estimates. `BatteryCapacity` presets (CR2032, Li-Po, etc.), `AdvertisingPowerProfile` presets (Aggressive through ExtremePowerSaving). `PowerProfile` for custom controller characteristics. |
 
 ---
 
