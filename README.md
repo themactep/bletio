@@ -320,7 +320,7 @@ Attribute Profile (GATT).
 | 3.3 | **GATT discovery procedures** | 🔴 Critical | L | ✅ Done | `GattClient` with `discover_all_primary_services()`, `discover_characteristics()`, `discover_descriptors()`. Handles continuation across multiple Read By Group Type/Type responses. Parses 16-bit and 128-bit UUIDs. `Attribute Not Found` error automatically terminates discovery. |
 | 3.4 | **GATT client read/write operations** | 🟡 High | M | ✅ Done | `read_value()`, `read_blob()`, `write_value()`, `write_value_without_response()`, `notify()`, `indicate()`, `send_confirmation()`. `GattEvent` variants: `ValueRead`, `ValueWritten`, `Notification`, `Indication`. Notifications/indications delivered automatically while idle. Busy-state guard prevents concurrent requests. |
 | 3.5 | **GATT server framework** | 🟡 High | XL | ✅ Done | `GattServer` with attribute table, handle allocation, `handle_request()` for all standard ATT requests (Exchange MTU, Find Information, Read By Group Type/Type, Read/Read Blob, Write Request/Command), permission checking. Builder pattern: `GattServiceBuilder` → `GattCharacteristicBuilder` → `GattDescriptorBuilder`. `set_value()`/`get_value()` for dynamic values. Standard descriptor UUIDs. |
-| 3.6 | **GATT profiles** | 🟢 Medium | XL | ⬜ | |
+| 3.6 | **GATT profiles** | 🟢 Medium | XL | ✅ Done | `profiles` module with pre-built service definitions: `device_information()` (DIS), `battery_service()` (BAS), `generic_access()` (GAP), `generic_attribute()` (GATT), `heart_rate_service()` (HRS). Standard UUID constants for common services, characteristics, and descriptors. |
 
 ---
 
