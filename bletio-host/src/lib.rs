@@ -20,7 +20,7 @@ pub use ble_host::{
 };
 pub use connection_parameters::{ConnectionParameters, ConnectionParametersBuilder};
 pub use connection_update_parameters::{
-    ConnectionUpdateParameters, ConnectionUpdateParametersBuilder,
+    ConnectionProfile, ConnectionUpdateParameters, ConnectionUpdateParametersBuilder,
 };
 
 mod device_information;
