@@ -239,6 +239,56 @@ impl<C: SmpCrypto> SmpPairing<C> {
     pub fn phase(&self) -> &SmpPairingPhase { &self.phase }
     pub fn is_complete(&self) -> bool { matches!(self.phase, SmpPairingPhase::Complete) }
 
+    /// Returns the derived STK if pairing is complete.
+    pub fn stk(&self) -> Option<&[u8; 16]> {
+        if self.is_complete() { Some(&self.stk) } else { None }
+    }
+
+    /// Generate bond keys after pairing completes.
+    ///
+    /// Returns an [`SmpKeys`] containing the LTK, EDIV, Rand, IRK, and CSRK
+    /// that should be distributed to the peer and persisted via a [`BondStore`].
+    /// Keys are derived from the STK and random values.
+    pub fn generate_keys(&self) -> SmpKeys {
+        // In a production stack, keys would be derived using cryptographic
+        // functions (h6, etc.) from the STK. For the mock/initial implementation,
+        // we use the STK directly as the LTK and generate placeholder values.
+        SmpKeys {
+            long_term_key: self.stk,
+            ediv: 0,
+            rand: self.our_random[..8].try_into().unwrap(),
+            identity_resolving_key: self.stk,
+            connection_signature_resolving_key: self.stk,
+        }
+    }
+
+    /// Build the key distribution PDUs to send to the peer after pairing.
+    ///
+    /// Returns a sequence of SMP PDUs (Encryption Information, Master Identification,
+    /// Identity Information, Identity Address Information, Signing Information)
+    /// that should be sent over ACL to complete bonding.
+    pub fn build_distribution_pdus(&self, keys: &SmpKeys) -> heapless::Vec<SmpPdu, 5> {
+        let mut pdus = heapless::Vec::new();
+        let _ = pdus.push(SmpPdu::EncryptionInformation {
+            long_term_key: keys.long_term_key,
+        });
+        let _ = pdus.push(SmpPdu::MasterIdentification {
+            ediv: keys.ediv,
+            rand: keys.rand,
+        });
+        let _ = pdus.push(SmpPdu::IdentityInformation {
+            identity_resolving_key: keys.identity_resolving_key,
+        });
+        let _ = pdus.push(SmpPdu::IdentityAddressInformation {
+            address_type: self.our_config.our_address_type,
+            address: self.our_config.our_address,
+        });
+        let _ = pdus.push(SmpPdu::SigningInformation {
+            connection_signature_resolving_key: keys.connection_signature_resolving_key,
+        });
+        pdus
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────
 
     fn store_bytes(&mut self, pdu: &SmpPdu, is_ours: bool) {

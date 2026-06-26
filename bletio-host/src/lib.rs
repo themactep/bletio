@@ -10,6 +10,7 @@ pub mod ble_device;
 pub mod ble_host;
 pub mod power;
 pub mod smp;
+pub mod bond_store;
 pub mod connection_parameters;
 pub mod connection_registry;
 pub mod connection_update_parameters;
@@ -19,6 +20,9 @@ pub use ble_device::BleDevice;
 pub use ble_host::{
     BleHost, BleHostObserver, BleHostState, BleHostStateAdvertising, BleHostStateInitial,
     BleHostStateStandby, BleHostStates,
+};
+pub use bond_store::{
+    Bond, BondStore, BondStoreError, DefaultBondStore, MemoryBondStore,
 };
 pub use connection_parameters::{ConnectionParameters, ConnectionParametersBuilder};
 pub use connection_registry::{
