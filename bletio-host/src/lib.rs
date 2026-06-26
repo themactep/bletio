@@ -5,6 +5,7 @@ use bletio_hci::{HciDriverError, SupportedCommands};
 
 pub mod advertising;
 pub mod assigned_numbers;
+pub mod att;
 pub mod ble_device;
 pub mod ble_host;
 pub mod connection_parameters;
