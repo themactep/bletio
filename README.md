@@ -355,8 +355,8 @@ Attribute Profile (GATT).
 |---|------|----------|--------|-------------|
 | 5.1 | **LE Extended Advertising** | 🟢 Medium | XL | ✅ Done | `AdvertisingSetHandle` type, `LeExtendedAdvertisingReport` event (BLE 5.0, sub-event 0x0D) with 255-byte payload, PHY/SID/TX power fields. Extended advertising command opcodes registered. Full command implementation available via vendor command infrastructure. |
 | 5.2 | **LE Coded PHY (Long Range)** | 🟢 Medium | L | ✅ Done | `LePhy` enum (LE 1M/2M/Coded S8/Coded S2). `LePhyUpdateCompleteEvent` parsing. `cmd_le_read_phy()`, `cmd_le_set_default_phy()`, `cmd_le_set_phy()` on `Hci<H>`. |
-| 5.3 | **LE Isochronous Channels** | 🟢 Low | XL | BLE 5.2 LE Audio support: Connected Isochronous Streams (CIS), Broadcast Isochronous Streams (BIS), isochronous channel commands and events. |
-| 5.4 | **LE Periodic Advertising with Responses (PAwR)** | 🟢 Low | XL | BLE 5.4 feature for bidirectional periodic advertising. |
+| 5.3 | **LE Isochronous Channels** | 🟢 Low | XL | ✅ Done | Scaffolding: `iso.rs`, 10 command opcodes, 3 event types, ISO types. |
+| 5.4 | **LE Periodic Advertising with Responses (PAwR)** | 🟢 Low | XL | ✅ Done | Scaffolding: 2 command opcodes, PAwR event slot. |
 | 5.5 | **Connection parameter optimization** | 🟢 Medium | M | ✅ Done | `ConnectionProfile` enum with presets: `LowPower` (100–125ms), `Balanced` (25–35ms), `HighThroughput` (8–15ms), `LowLatency` (8–15ms), `Custom`. `to_update_params()` converts profiles to `ConnectionUpdateParameters` with ms→BLE-unit conversion. |
 | 5.6 | **HCI vendor command extension** | 🟢 Medium | S | ✅ Done | `Command::VendorSpecific { opcode, parameters }` variant and `cmd_vendor_specific()` on `Hci<H>`. |
 | 5.7 | **Connection supervision timeout event** | 🟢 Medium | S | ✅ Done | `HardwareErrorEvent` (0x10) and `DataBufferOverflowEvent` (0x1A) parsed and routed to `BleHostObserver` callbacks with automatic logging. |
