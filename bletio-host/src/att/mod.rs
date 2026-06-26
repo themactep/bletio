@@ -7,6 +7,7 @@ mod att_client;
 mod att_pdu;
 mod gatt;
 mod gatt_server;
+pub mod profiles;
 
 pub use att_client::{AttClient, EncodedAttPdu};
 pub use att_pdu::{
