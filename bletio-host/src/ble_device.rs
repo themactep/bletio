@@ -42,6 +42,25 @@ where
     }
 }
 
+/// Top-level BLE device runner.
+///
+/// Owns the HCI driver and drives the complete BLE lifecycle: setup,
+/// advertising, scanning, connecting, and event dispatch via the
+/// [`BleHostObserver`] pattern.
+///
+/// # Example
+///
+/// ```ignore
+/// use bletio_host::{BleDevice, BleHostObserver, BleHostStates};
+///
+/// struct MyApp;
+/// impl BleHostObserver for MyApp { /* ... */ }
+///
+/// let mut device = BleDevice::builder(MyApp)
+///     .with_local_name("My Device")
+///     .build();
+/// device.run(hci_driver).await?;
+/// ```
 pub struct BleDevice<'a, O>
 where
     O: BleHostObserver,

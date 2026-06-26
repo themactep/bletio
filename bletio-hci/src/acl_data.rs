@@ -39,9 +39,16 @@ pub enum BroadcastFlag {
     BrEdrBroadcast,
 }
 
-/// ACL data packet.
+/// ACL data packet received from or to be sent to the controller.
 ///
-/// See [Core Specification 6.0, Vol. 4, Part E, 5.4.2](https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-60/out/en/host-controller-interface/host-controller-interface-functional-specification.html#UUID-bc4ffa33-44ef-e93c-16c8-14aa99597cfc).
+/// Represents an HCI ACL Data Packet per [Core Spec 6.0, Vol. 4, Part E, §5.4.2].
+/// ACL data carries L2CAP PDUs which in turn carry ATT, SMP, or other upper-layer data.
+///
+/// Use [`build`](Self::build) to construct packets for sending, or inspect received
+/// packets via [`handle`](Self::handle), [`data`](Self::data), and the flag accessors.
+///
+/// Maximum payload size is constrained by the controller's buffer size
+/// (obtained via [`cmd_le_read_buffer_size`](crate::Hci::cmd_le_read_buffer_size)).
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AclData {

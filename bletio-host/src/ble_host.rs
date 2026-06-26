@@ -506,6 +506,23 @@ where
     }
 }
 
+/// Observer trait for BLE events.
+///
+/// Implement this trait to handle BLE events from [`BleDevice::run`].
+/// All methods have default no-op implementations — override only what you need.
+///
+/// # Callbacks
+///
+/// | Method | Trigger |
+/// |--------|---------|
+/// | [`ready`](Self::ready) | Stack initialized, ready to configure |
+/// | [`advertising_report_received`](Self::advertising_report_received) | LE advertising report (with scan response) |
+/// | [`connection_complete`](Self::connection_complete) | LE connection established |
+/// | [`disconnection_complete`](Self::disconnection_complete) | Connection terminated |
+/// | [`connection_update_complete`](Self::connection_update_complete) | Connection parameters updated |
+/// | [`acl_data_received`](Self::acl_data_received) | ACL data packet received |
+/// | [`hardware_error`](Self::hardware_error) | Controller hardware error |
+/// | [`data_buffer_overflow`](Self::data_buffer_overflow) | Controller data buffer overflow |
 pub trait BleHostObserver {
     #[allow(unused_variables)]
     fn acl_data_received<'a, H>(

@@ -80,6 +80,26 @@ pub struct Attribute {
 const MAX_ATTRIBUTES: usize = 64;
 
 /// GATT server that manages a local attribute table and handles incoming ATT requests.
+/// GATT server managing a local attribute table.
+///
+/// Handles incoming ATT requests (read, write, discovery) from connected centrals.
+/// Use builder patterns ([`GattServiceBuilder`], [`GattCharacteristicBuilder`],
+/// [`GattDescriptorBuilder`]) to register services, or use pre-built profiles
+/// from the [`profiles`](crate::att::profiles) module.
+///
+/// # Features
+///
+/// - **Attribute storage**: Up to 64 attributes with automatic handle allocation.
+/// - **CCCD tracking**: Auto-detects writes to Client Characteristic Configuration
+///   descriptors (UUID 0x2902) and tracks notification/indication subscription state.
+/// - **Permission checking**: Enforces read/write/write-without-response permissions.
+/// - **Dynamic values**: [`set_value`](Self::set_value) / [`get_value`](Self::get_value)
+///   for updating characteristic values at runtime.
+/// - **ATT request handling**: [`handle_request`](Self::handle_request) dispatches
+///   incoming ATT PDUs to the appropriate server-side handler.
+///
+/// See the [GATT server demo](https://github.com/themactep/bletio/blob/main/bletio-host/examples/gatt_server_demo.rs)
+/// for a complete example.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct GattServer {

@@ -125,7 +125,21 @@ pub enum GattEvent {
     },
 }
 
-/// GATT client that drives ATT for discovery and read/write operations.
+/// GATT client for service discovery, characteristic read/write, and notifications.
+///
+/// Built on top of [`AttClient`], this provides high-level GATT operations:
+///
+/// - **Service discovery**: [`discover_all_primary_services`](Self::discover_all_primary_services)
+/// - **Characteristic discovery**: [`discover_characteristics`](Self::discover_characteristics)
+/// - **Descriptor discovery**: [`discover_descriptors`](Self::discover_descriptors)
+/// - **Read**: [`read_value`](Self::read_value), [`read_blob`](Self::read_blob)
+/// - **Write**: [`write_value`](Self::write_value), [`write_value_without_response`](Self::write_value_without_response)
+/// - **Notifications/Indications**: received via [`feed`](Self::feed) as [`GattEvent`]
+///
+/// Multi-response discovery uses [`continue_request`](Self::continue_request) for continuation.
+///
+/// See the [GATT client demo](https://github.com/themactep/bletio/blob/main/bletio-host/examples/gatt_client_demo.rs)
+/// for a complete example.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct GattClient {

@@ -16,6 +16,35 @@ use crate::{
 
 const HCI_COMMAND_TIMEOUT: Duration = Duration::from_millis(1000);
 
+/// Host-Controller Interface (HCI) for communicating with a BLE controller.
+///
+/// `Hci<H>` manages the command/event flow between the host and the Bluetooth
+/// controller. It handles:
+///
+/// - **Command flow control**: Tracks `num_hci_command_packets` to avoid
+///   overflowing the controller's command buffer.
+/// - **Event buffering**: Received events are buffered in a heapless queue
+///   and returned via [`wait_for_event`](Self::wait_for_event).
+/// - **Timeouts**: Every command is guarded by a 1-second timeout via the
+///   [`WithTimeout`](crate::WithTimeout) trait.
+/// - **Packet parsing**: Uses `nom` for zero-copy binary parsing of HCI
+///   commands, events, and ACL data packets.
+///
+/// # Type parameter
+///
+/// - `H`: The [`HciDriver`](crate::HciDriver) implementation for the physical
+///   transport (UART, USB, SPI, etc.).
+///
+/// # Example
+///
+/// ```ignore
+/// use bletio_hci::{Hci, HciDriver};
+///
+/// // Implement HciDriver for your transport...
+/// let hci = Hci::new(my_driver);
+/// hci.cmd_reset().await?;
+/// let events = hci.wait_for_event().await?;
+/// ```
 #[derive(Debug)]
 pub struct Hci<H>
 where
@@ -31,6 +60,11 @@ impl<H> Hci<H>
 where
     H: HciDriver,
 {
+    /// Create a new HCI instance with the given driver.
+    ///
+    /// The controller starts with `num_hci_command_packets = 0`, so the first
+    /// command will trigger [`wait_controller_ready`](Self::wait_controller_ready)
+    /// until the controller sends a `CommandComplete` or `CommandStatus` event.
     pub fn new(hci_driver: H) -> Self {
         Self {
             driver: hci_driver,
@@ -411,6 +445,15 @@ where
         Ok(())
     }
 
+    /// Wait for HCI events from the controller.
+    ///
+    /// Returns an [`EventList`] containing up to 4 buffered events. If no events
+    /// are available and the read buffer is empty, this will read from the HCI
+    /// driver until data arrives.
+    ///
+    /// Events that arrive while a command is being processed (e.g., during
+    /// [`execute_command`](Self::execute_command)) are buffered and returned
+    /// on the next call.
     pub async fn wait_for_event(&mut self) -> Result<EventList, Error> {
         let mut event_list = core::mem::take(&mut self.event_list);
 
