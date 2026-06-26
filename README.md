@@ -71,9 +71,10 @@ A **`no_std`-compatible Bluetooth Low Energy (BLE) stack** for embedded Rust, ta
   | `Advertising` | Stop advertising |
   | `Scanning` | Stop scanning |
   | `Initiating` | Cancel connection |
-  | `ConnectedCentral` | Disconnect, update connection parameters |
-  | `ConnectedPeripheral` | Disconnect, update connection parameters |
-- **Observer pattern** — `BleHostObserver` trait with 6 callbacks and sensible defaults
+  | `ConnectedCentral` | Disconnect, update connection parameters, send ACL data |
+  | `ConnectedPeripheral` | Disconnect, update connection parameters, send ACL data |
+- **Observer pattern** — `BleHostObserver` trait with 7 callbacks and sensible defaults
+- **Data plane** — Send/receive ACL data packets on connections; ATT PDU encoding/decoding (16 PDU types)
 - **Event loop** — `BleDevice::run()` drives the complete lifecycle
 - Automatic TX power and appearance insertion in advertising data
 - Builder patterns for all parameter types
@@ -312,14 +313,14 @@ The stack currently handles only the control plane (commands and events). The da
 With ACL data flowing, the next layer is the Attribute Protocol (ATT) and Generic
 Attribute Profile (GATT).
 
-| # | Item | Priority | Effort | Description |
-|---|------|----------|--------|-------------|
-| 3.1 | **ATT PDU encoding/decoding** | 🔴 Critical | L | Implement ATT PDU types per Core Spec v6.0, Vol. 3, Part F: Error Response, Exchange MTU Request/Response, Find Information, Read By Type, Read/Write Request/Response, Handle Value Notification/Indication/Confirmation. Use the existing `EncodeToBuffer` trait and nom parsers for consistency. |
-| 3.2 | **ATT client state machine** | 🔴 Critical | XL | Implement a sequential request-response client. The ATT protocol is strictly sequential: one outstanding request per direction. Track pending requests with timeouts (ATT transaction timeout = 30 seconds). |
-| 3.3 | **GATT discovery procedures** | 🔴 Critical | L | Built on the ATT client: Primary Service Discovery, Relationship Discovery, Characteristic Discovery, Characteristic Descriptor Discovery. Provide ergonomic async functions that return discovered service/characteristic/descriptor hierarchies. |
-| 3.4 | **GATT client read/write operations** | 🟡 High | M | Read Characteristic Value, Write Characteristic Value (with/without response), Read Characteristic Descriptor, Write Characteristic Descriptor, Notifications, Indications. |
-| 3.5 | **GATT server framework** | 🟡 High | XL | A mechanism for applications to register local GATT services with characteristics and descriptors. Handle incoming ATT requests from connected centrals. Provide builder patterns for service/characteristic/descriptor registration. |
-| 3.6 | **GATT profiles** | 🟢 Medium | XL | Implement standard GATT profiles as optional modules: Device Information Service (DIS), Battery Service (BAS), Generic Access Profile (GAP), Generic Attribute Profile. |
+| # | Item | Priority | Effort | Status | Description |
+|---|------|----------|--------|--------|-------------|
+| 3.1 | **ATT PDU encoding/decoding** | 🔴 Critical | L | ✅ Done | 16 ATT PDU types implemented with `EncodeToBuffer` serialization and nom-based zero-copy parsing. Supports Error Response, Exchange MTU, Find Information, Read By Type/Group Type, Read/Read Blob, Write Request/Command, Handle Value Notification/Indication/Confirmation. Supporting types: `AttHandle`, `AttValue`, `AttUuid`, `AttError`, `AttErrorCode`, `AttOpcode`. |
+| 3.2 | **ATT client state machine** | 🔴 Critical | XL | ⬜ | Next: sequential request-response with timeouts. |
+| 3.3 | **GATT discovery procedures** | 🔴 Critical | L | ⬜ | |
+| 3.4 | **GATT client read/write operations** | 🟡 High | M | ⬜ | |
+| 3.5 | **GATT server framework** | 🟡 High | XL | ⬜ | |
+| 3.6 | **GATT profiles** | 🟢 Medium | XL | ⬜ | |
 
 ---
 
