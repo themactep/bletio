@@ -13,7 +13,7 @@ pub struct ConnectionHandle {
 }
 
 impl ConnectionHandle {
-    pub(crate) const fn try_new(handle: u16) -> Result<Self, Error> {
+    pub const fn try_new(handle: u16) -> Result<Self, Error> {
         if handle <= 0x0EFF {
             Ok(Self { value: handle })
         } else {

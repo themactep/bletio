@@ -11,6 +11,7 @@ pub mod ble_host;
 pub mod power;
 pub mod smp;
 pub mod connection_parameters;
+pub mod connection_registry;
 pub mod connection_update_parameters;
 pub mod uuid;
 
@@ -20,6 +21,10 @@ pub use ble_host::{
     BleHostStateStandby, BleHostStates,
 };
 pub use connection_parameters::{ConnectionParameters, ConnectionParametersBuilder};
+pub use connection_registry::{
+    CentralConnectionRegistry, Connection, ConnectionRegistry, ConnectionRole,
+    PeripheralConnectionRegistry,
+};
 pub use connection_update_parameters::{
     ConnectionProfile, ConnectionUpdateParameters, ConnectionUpdateParametersBuilder,
 };
