@@ -8,6 +8,7 @@ pub mod assigned_numbers;
 pub mod att;
 pub mod ble_device;
 pub mod ble_host;
+pub mod power;
 pub mod smp;
 pub mod connection_parameters;
 pub mod connection_update_parameters;
