@@ -90,6 +90,26 @@ where
                                     .notify_acl_data_received(host, acl_data)
                                     .await?;
                             }
+                            Event::DataBufferOverflow(event) => {
+                                #[cfg(feature = "defmt")]
+                                defmt::warn!("Data buffer overflow: link_type={}", event.link_type);
+                                #[cfg(all(feature = "log", not(feature = "defmt")))]
+                                log::warn!("Data buffer overflow: link_type={}", event.link_type);
+                                host = self
+                                    .observer
+                                    .data_buffer_overflow(host, event)
+                                    .await;
+                            }
+                            Event::HardwareError(event) => {
+                                #[cfg(feature = "defmt")]
+                                defmt::error!("Hardware error: code=0x{:02X}", event.hardware_code);
+                                #[cfg(all(feature = "log", not(feature = "defmt")))]
+                                log::error!("Hardware error: code=0x{:02X}", event.hardware_code);
+                                host = self
+                                    .observer
+                                    .hardware_error(host, event)
+                                    .await;
+                            }
                             Event::DisconnectionComplete(disconnection_complete_event) => {
                                 host = self
                                     .notify_disconnection_complete(

@@ -4,15 +4,20 @@ use heapless::Vec;
 use num_enum::{FromPrimitive, IntoPrimitive};
 
 use crate::event::command_status::CommandStatusEvent;
+use crate::event::data_buffer_overflow::DataBufferOverflowEvent;
+use crate::event::hardware_error::HardwareErrorEvent;
 use crate::{AclData, CommandCompleteEvent, DisconnectionCompleteEvent, LeMetaEvent};
 
 pub(crate) mod command_complete;
 pub(crate) mod command_status;
+pub(crate) mod data_buffer_overflow;
 pub(crate) mod disconnection_complete;
+pub(crate) mod hardware_error;
 pub(crate) mod le_advertising_report;
 pub(crate) mod le_connection_complete;
 pub(crate) mod le_connection_update_complete;
 pub(crate) mod le_meta;
+pub(crate) mod le_phy_update_complete;
 
 const EVENT_LIST_NB_EVENTS: usize = 4;
 
@@ -21,9 +26,11 @@ const EVENT_LIST_NB_EVENTS: usize = 4;
 #[allow(clippy::large_enum_variant)]
 pub enum Event {
     AclData(AclData),
-    DisconnectionComplete(DisconnectionCompleteEvent),
     CommandComplete(CommandCompleteEvent),
     CommandStatus(CommandStatusEvent),
+    DataBufferOverflow(DataBufferOverflowEvent),
+    DisconnectionComplete(DisconnectionCompleteEvent),
+    HardwareError(HardwareErrorEvent),
     LeMeta(LeMetaEvent),
     Unsupported(u8),
 }
@@ -53,6 +60,8 @@ impl DerefMut for EventList {
 #[repr(u8)]
 enum EventCode {
     DisconnectionComplete = 0x05,
+    HardwareError = 0x10,
+    DataBufferOverflow = 0x1A,
     CommandComplete = 0x0E,
     CommandStatus = 0x0F,
     LeMeta = 0x3E,
@@ -67,7 +76,9 @@ pub(crate) mod parser {
 
     use super::*;
     use crate::event::command_status::parser::command_status_event;
+    use crate::event::data_buffer_overflow::parser::data_buffer_overflow_event;
     use crate::event::disconnection_complete::parser::disconnection_complete_event;
+    use crate::event::hardware_error::parser::hardware_error_event;
     use crate::{
         event::{
             command_complete::parser::command_complete_event, le_meta::parser::le_meta_event,
@@ -99,6 +110,14 @@ pub(crate) mod parser {
                 EventCode::DisconnectionComplete => {
                     let (_, event) = disconnection_complete_event(parameters)?;
                     Event::DisconnectionComplete(event)
+                }
+                EventCode::HardwareError => {
+                    let (_, event) = hardware_error_event(parameters)?;
+                    Event::HardwareError(event)
+                }
+                EventCode::DataBufferOverflow => {
+                    let (_, event) = data_buffer_overflow_event(parameters)?;
+                    Event::DataBufferOverflow(event)
                 }
                 EventCode::CommandComplete => {
                     let (_, event) = command_complete_event(parameters)?;

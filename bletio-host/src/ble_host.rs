@@ -3,12 +3,12 @@ use core::num::NonZeroU16;
 use core::ops::Deref;
 
 use bletio_hci::{
-    AclData, BroadcastFlag, ConnectionHandle, ConnectionPeerAddress, DisconnectionCompleteEvent,
-    EventList, EventMask, FilterDuplicates, Hci, HciDriver, LeAdvertisingReportEventType,
-    LeConnectionCompleteEvent, LeConnectionUpdateCompleteEvent, LeEventMask,
-    LeFilterAcceptListAddress, PacketBoundaryFlag, PublicDeviceAddress,
-    RandomStaticDeviceAddress, Reason, Rssi, ScanEnable, SupportedCommands, SupportedFeatures,
-    SupportedLeFeatures, SupportedLeStates,
+    AclData, BroadcastFlag, ConnectionHandle, ConnectionPeerAddress, DataBufferOverflowEvent,
+    DisconnectionCompleteEvent, EventList, EventMask, FilterDuplicates, HardwareErrorEvent,
+    Hci, HciDriver, LeAdvertisingReportEventType, LeConnectionCompleteEvent,
+    LeConnectionUpdateCompleteEvent, LeEventMask, LeFilterAcceptListAddress, PacketBoundaryFlag,
+    PublicDeviceAddress, RandomStaticDeviceAddress, Reason, Rssi, ScanEnable, SupportedCommands,
+    SupportedFeatures, SupportedLeFeatures, SupportedLeStates,
 };
 
 use crate::advertising::{
@@ -563,6 +563,30 @@ pub trait BleHostObserver {
         &self,
         host: BleHostStates<'a, H>,
         event: &DisconnectionCompleteEvent,
+    ) -> impl core::future::Future<Output = BleHostStates<'a, H>>
+    where
+        H: HciDriver,
+    {
+        async { host }
+    }
+
+    #[allow(unused_variables)]
+    fn hardware_error<'a, H>(
+        &self,
+        host: BleHostStates<'a, H>,
+        event: &HardwareErrorEvent,
+    ) -> impl core::future::Future<Output = BleHostStates<'a, H>>
+    where
+        H: HciDriver,
+    {
+        async { host }
+    }
+
+    #[allow(unused_variables)]
+    fn data_buffer_overflow<'a, H>(
+        &self,
+        host: BleHostStates<'a, H>,
+        event: &DataBufferOverflowEvent,
     ) -> impl core::future::Future<Output = BleHostStates<'a, H>>
     where
         H: HciDriver,

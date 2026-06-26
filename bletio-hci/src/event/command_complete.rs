@@ -431,6 +431,9 @@ pub(crate) mod parser {
             CommandOpCode::Disconnect
             | CommandOpCode::LeConnectionUpdate
             | CommandOpCode::LeCreateConnection
+            | CommandOpCode::LeReadPhy
+            | CommandOpCode::LeSetDefaultPhy
+            | CommandOpCode::LeSetPhy
             | CommandOpCode::Unsupported(_) => {
                 return Err(nom::Err::Failure(nom::error::Error::new(
                     return_parameters,

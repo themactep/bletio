@@ -74,7 +74,9 @@ pub use error::Error;
 pub use error_code::ErrorCode;
 pub use event::{
     command_complete::CommandCompleteEvent,
+    data_buffer_overflow::DataBufferOverflowEvent,
     disconnection_complete::DisconnectionCompleteEvent,
+    hardware_error::HardwareErrorEvent,
     le_advertising_report::{
         LeAdvertisingReport, LeAdvertisingReportData, LeAdvertisingReportEventType,
         LeAdvertisingReportList,
@@ -82,6 +84,7 @@ pub use event::{
     le_connection_complete::{CentralClockAccuracy, LeConnectionCompleteEvent, Role},
     le_connection_update_complete::LeConnectionUpdateCompleteEvent,
     le_meta::LeMetaEvent,
+    le_phy_update_complete::{LePhy, LePhyUpdateCompleteEvent},
     Event, EventList,
 };
 pub use hci::Hci;

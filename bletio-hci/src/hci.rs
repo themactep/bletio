@@ -325,6 +325,54 @@ where
             .await
     }
 
+    /// Read the current PHY for a connection (LE Read PHY).
+    pub async fn cmd_le_read_phy(
+        &mut self,
+        connection_handle: ConnectionHandle,
+    ) -> Result<(), Error> {
+        self.execute_command_with_command_status_response(Command::LeReadPhy(connection_handle))
+            .await
+    }
+
+    /// Set the default preferred PHY (LE Set Default PHY).
+    ///
+    /// `all_phys`: 0 = use tx_phys/rx_phys, 1 = no preference for TX, 2 = no preference for RX, 3 = no preference.
+    /// `tx_phys`/`rx_phys`: bitmask of preferred PHYs (1 = LE 1M, 2 = LE 2M, 4 = LE Coded).
+    pub async fn cmd_le_set_default_phy(
+        &mut self,
+        all_phys: u8,
+        tx_phys: u8,
+        rx_phys: u8,
+    ) -> Result<(), Error> {
+        self.cmd_with_command_complete_response_without_parameter(
+            Command::LeSetDefaultPhy { all_phys, tx_phys, rx_phys },
+        )
+        .await
+    }
+
+    /// Set the PHY for an active connection (LE Set PHY).
+    ///
+    /// `all_phys`: 0 = use tx_phys/rx_phys, 1 = no preference for TX, 2 = no preference for RX, 3 = no preference.
+    /// `tx_phys`/`rx_phys`: bitmask of preferred PHYs.
+    /// `phy_options`: 0 = no preference, 1 = S=2 coding, 2 = S=8 coding.
+    pub async fn cmd_le_set_phy(
+        &mut self,
+        connection_handle: ConnectionHandle,
+        all_phys: u8,
+        tx_phys: u8,
+        rx_phys: u8,
+        phy_options: u16,
+    ) -> Result<(), Error> {
+        self.execute_command_with_command_status_response(Command::LeSetPhy {
+            connection_handle,
+            all_phys,
+            tx_phys,
+            rx_phys,
+            phy_options,
+        })
+        .await
+    }
+
     /// Send a vendor-specific HCI command.
     ///
     /// `opcode` is the combined OGF+OCF (e.g., `0xFC00` for a vendor-specific debug command).

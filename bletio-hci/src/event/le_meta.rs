@@ -9,6 +9,7 @@ pub enum LeMetaEvent {
     LeConnectionComplete(LeConnectionCompleteEvent),
     LeAdvertisingReport(LeAdvertisingReportList),
     LeConnectionUpdateComplete(LeConnectionUpdateCompleteEvent),
+    LePhyUpdateComplete(crate::event::le_phy_update_complete::LePhyUpdateCompleteEvent),
     Unsupported(u8),
 }
 
@@ -19,6 +20,7 @@ enum LeMetaEventCode {
     LeConnectionComplete = 0x01,
     LeAdvertisingReport = 0x02,
     LeConnectionUpdateComplete = 0x03,
+    LePhyUpdateComplete = 0x0C,
     #[num_enum(catch_all)]
     Unsupported(u8),
 }
@@ -30,6 +32,7 @@ pub(crate) mod parser {
     use crate::event::le_advertising_report::parser::le_advertising_report_event;
     use crate::event::le_connection_complete::parser::le_connection_complete_event;
     use crate::event::le_connection_update_complete::parser::le_connection_update_complete_event;
+    use crate::event::le_phy_update_complete::parser::le_phy_update_complete_event;
 
     fn le_meta_event_code(input: &[u8]) -> IResult<&[u8], LeMetaEventCode> {
         map_res(le_u8, LeMetaEventCode::try_from).parse(input)
@@ -42,6 +45,9 @@ pub(crate) mod parser {
             LeMetaEventCode::LeAdvertisingReport => le_advertising_report_event(parameters),
             LeMetaEventCode::LeConnectionUpdateComplete => {
                 le_connection_update_complete_event(parameters)
+            }
+            LeMetaEventCode::LePhyUpdateComplete => {
+                le_phy_update_complete_event(parameters)
             }
             LeMetaEventCode::Unsupported(event_code) => {
                 Ok((&[], LeMetaEvent::Unsupported(event_code)))

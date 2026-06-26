@@ -51,6 +51,9 @@ pub(crate) enum CommandOpCode {
     // LeEncrypt = opcode(LE_CONTROLLER_OGF, 0x0017),
     LeRand = opcode(LE_CONTROLLER_OGF, 0x0018),
     LeReadSupportedStates = opcode(LE_CONTROLLER_OGF, 0x001C),
+    LeReadPhy = opcode(LE_CONTROLLER_OGF, 0x0030),
+    LeSetDefaultPhy = opcode(LE_CONTROLLER_OGF, 0x0031),
+    LeSetPhy = opcode(LE_CONTROLLER_OGF, 0x0032),
     #[num_enum(catch_all)]
     Unsupported(u16),
 }
@@ -87,6 +90,12 @@ pub(crate) enum Command {
     ReadLocalSupportedFeatures,
     Reset,
     SetEventMask(EventMask),
+    /// Read the current PHY for a connection (LE Read PHY).
+    LeReadPhy(ConnectionHandle),
+    /// Set the default PHY preferences (LE Set Default PHY).
+    LeSetDefaultPhy { all_phys: u8, tx_phys: u8, rx_phys: u8 },
+    /// Set the PHY for an active connection (LE Set PHY).
+    LeSetPhy { connection_handle: ConnectionHandle, all_phys: u8, tx_phys: u8, rx_phys: u8, phy_options: u16 },
     /// Vendor-specific HCI command. OGF and OCF are combined into `opcode`,
     /// and `parameters` is the raw parameter bytes.
     VendorSpecific { opcode: u16, parameters: heapless::Vec<u8, 255> },
@@ -152,6 +161,20 @@ impl Command {
             Command::SetEventMask(event_mask) => {
                 CommandPacket::new(self.opcode()).encode(event_mask)?
             }
+            Command::LeReadPhy(connection_handle) => {
+                CommandPacket::new(self.opcode()).encode(connection_handle)?
+            }
+            Command::LeSetDefaultPhy { all_phys, tx_phys, rx_phys } => {
+                let mut packet = CommandPacket::new(self.opcode());
+                packet = packet.append_raw(&[*all_phys, *tx_phys, *rx_phys])?;
+                packet
+            }
+            Command::LeSetPhy { connection_handle, all_phys, tx_phys, rx_phys, phy_options } => {
+                let mut packet = CommandPacket::new(self.opcode()).encode(connection_handle)?;
+                packet = packet.append_raw(&[*all_phys, *tx_phys, *rx_phys])?;
+                packet = packet.append_raw(&phy_options.to_le_bytes())?;
+                packet
+            }
             Command::VendorSpecific { opcode, parameters } => {
                 let packet = CommandPacket::new(CommandOpCode::Unsupported(*opcode));
                 if !parameters.is_empty() {
@@ -198,6 +221,9 @@ impl Command {
             Self::ReadLocalSupportedFeatures => CommandOpCode::ReadLocalSupportedFeatures,
             Self::Reset => CommandOpCode::Reset,
             Self::SetEventMask(_) => CommandOpCode::SetEventMask,
+            Self::LeReadPhy(_) => CommandOpCode::LeReadPhy,
+            Self::LeSetDefaultPhy { .. } => CommandOpCode::LeSetDefaultPhy,
+            Self::LeSetPhy { .. } => CommandOpCode::LeSetPhy,
             Self::VendorSpecific { .. } => CommandOpCode::Unsupported(0),
             Self::Unsupported(opcode) => CommandOpCode::Unsupported(*opcode),
         }
@@ -254,7 +280,8 @@ impl CommandPacket {
 
 pub(crate) mod parser {
     use nom::{
-        bytes::take, combinator::map, number::complete::le_u16, sequence::pair, IResult, Parser,
+        bytes::take, combinator::map, number::complete::le_u16, number::complete::le_u8,
+        sequence::pair, IResult, Parser,
     };
 
     use crate::advertising::{
@@ -367,6 +394,21 @@ pub(crate) mod parser {
                 CommandOpCode::SetEventMask => {
                     let (_, event_mask) = event_mask(parameters)?;
                     Command::SetEventMask(event_mask)
+                }
+                CommandOpCode::LeReadPhy => {
+                    let (_, connection_handle) = connection_handle(parameters)?;
+                    Command::LeReadPhy(connection_handle)
+                }
+                CommandOpCode::LeSetDefaultPhy => {
+                    let (rest, all_phys) = le_u8(parameters)?;
+                    let (_, (tx_phys, rx_phys)) = (le_u8, le_u8).parse(rest)?;
+                    Command::LeSetDefaultPhy { all_phys, tx_phys, rx_phys }
+                }
+                CommandOpCode::LeSetPhy => {
+                    let (rest, connection_handle) = connection_handle(parameters)?;
+                    let (rest, (all_phys, tx_phys, rx_phys)) = (le_u8, le_u8, le_u8).parse(rest)?;
+                    let (_, phy_options) = le_u16(rest)?;
+                    Command::LeSetPhy { connection_handle, all_phys, tx_phys, rx_phys, phy_options }
                 }
                 CommandOpCode::Unsupported(opcode) => Command::Unsupported(opcode),
             }),
