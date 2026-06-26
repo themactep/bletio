@@ -1,0 +1,379 @@
+# bletio
+
+A **`no_std`-compatible Bluetooth Low Energy (BLE) stack** for embedded Rust, targeting both bare-metal (Embassy) and Linux/desktop (Tokio) environments.
+
+[![CI](https://github.com/themactep/bletio/actions/workflows/general.yml/badge.svg)](https://github.com/themactep/bletio/actions/workflows/general.yml)
+[![Security Audit](https://github.com/themactep/bletio/actions/workflows/audit.yml/badge.svg)](https://github.com/themactep/bletio/actions/workflows/audit.yml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│                 Application                  │
+│  (implements BleHostObserver)                │
+├─────────────────────────────────────────────┤
+│              bletio-host                     │
+│  Type-state machine, observer pattern,       │
+│  advertising structures, connection mgmt     │
+├─────────────────────────────────────────────┤
+│              bletio-hci                      │
+│  HCI command/event encoding & parsing,       │
+│  controller flow control, timeouts           │
+├─────────────────────────────────────────────┤
+│              bletio-utils                    │
+│  Const-generic buffers, LE integer encoding, │
+│  bitfield arrays                             │
+├─────────────────────────────────────────────┤
+│        HciDriver trait (you implement)       │
+│  UART / USB / SPI transport to controller    │
+├─────────────────────────────────────────────┤
+│           BLE Controller (hardware)           │
+└─────────────────────────────────────────────┘
+```
+
+### Crates
+
+| Crate | Purpose |
+|-------|---------|
+| `bletio-utils` | Zero-allocation byte buffers, little-endian encoding, bitflag arrays |
+| `bletio-hci` | Host-Controller Interface layer: command encoding, event parsing, flow control |
+| `bletio-host` | Host layer: typed state machine, advertising, scanning, connections, observer pattern |
+
+---
+
+## Features
+
+### BLE Role Support
+- **Peripheral** — Advertise, accept connections, update connection parameters
+- **Central** — Scan, initiate connections, update connection parameters
+- **Observer** — Passive scanning of advertising reports
+- **Broadcaster** — Non-connectable advertising
+
+### HCI Layer (`bletio-hci`)
+- 25+ LE controller commands implemented per Bluetooth Core Specification v4.2+
+- Nom-based zero-copy packet parsing for commands and events
+- Controller flow control (`num_hci_command_packets` tracking)
+- 1-second command timeouts
+- Dual async runtime support: **Tokio** (desktop/Linux) and **Embassy** (bare-metal)
+- Full event buffering with a `heapless::Vec` (4 events)
+- Exhaustive error model: 50+ error variants covering all validation failures
+- Command opcodes, error codes, and event codes via `num_enum` with catch-all variants
+
+### Host Layer (`bletio-host`)
+- **Typed state machine** — compile-time prevention of invalid API calls:
+  | State | Available operations |
+  |-------|---------------------|
+  | `Initial` | Automatic setup only |
+  | `Standby` | Start advertising, scanning, or connecting; manage filter accept list; create random address |
+  | `Advertising` | Stop advertising |
+  | `Scanning` | Stop scanning |
+  | `Initiating` | Cancel connection |
+  | `ConnectedCentral` | Disconnect, update connection parameters |
+  | `ConnectedPeripheral` | Disconnect, update connection parameters |
+- **Observer pattern** — `BleHostObserver` trait with 6 callbacks and sensible defaults
+- **Event loop** — `BleDevice::run()` drives the complete lifecycle
+- Automatic TX power and appearance insertion in advertising data
+- Builder patterns for all parameter types
+
+### Advertising Data (AD Structures)
+20+ AD structure types supported:
+
+| Type | AD Type Code |
+|------|-------------|
+| Flags | `0x01` |
+| Service UUIDs (16, 32, 128-bit, Incomplete/Complete list) | `0x02`–`0x07` |
+| Local Name (Shortened/Complete) | `0x08`/`0x09` |
+| TX Power Level | `0x0A` |
+| Peripheral Connection Interval Range | `0x12` |
+| Service Solicitation (16, 32, 128-bit) | `0x14`/`0x1F`/`0x15` |
+| Service Data (16, 32, 128-bit) | `0x16`/`0x20`/`0x21` |
+| Appearance | `0x19` |
+| Advertising Interval | `0x1A` |
+| Public/Random Target Address | `0x17`/`0x18` |
+| LE Supported Features | `0x27` |
+| URI | `0x24` |
+| Manufacturer Specific Data | `0xFF` |
+
+### Assigned Numbers
+Auto-generated from Bluetooth SIG sources:
+- Company Identifiers
+- Service UUIDs (16-bit)
+- Appearance Values
+- AD Types
+- URI Schemes (provisioned)
+
+### Async Runtime Support
+
+| Feature | Runtime | Use Case |
+|---------|---------|----------|
+| `tokio` (default) | Tokio | Linux, macOS, desktop testing |
+| `embassy` | Embassy | Bare-metal embedded (nRF, STM32, ESP32) |
+
+Mutually exclusive. Both provide `HciDriver::with_timeout()` via the `WithTimeout` trait.
+
+### `no_std` & Embedded
+- Zero heap allocations in core logic
+- `heapless::Vec` for event buffering
+- Const-generic `Buffer<CAP>` for packet construction
+- `defmt` support for embedded logging (`defmt` feature flag)
+- `embassy-time` for bare-metal timeouts
+
+---
+
+## Quick Start
+
+### 1. Add dependencies
+
+```toml
+[dependencies]
+bletio-host = { git = "https://github.com/themactep/bletio" }
+bletio-hci = { git = "https://github.com/themactep/bletio" }
+bletio-utils = { git = "https://github.com/themactep/bletio" }
+```
+
+For embedded use with `defmt`:
+
+```toml
+bletio-host = { git = "https://github.com/themactep/bletio", default-features = false, features = ["embassy", "defmt"] }
+```
+
+### 2. Implement `HciDriver`
+
+```rust
+use bletio_hci::{HciDriver, HciDriverError};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+struct UartHciDriver {
+    serial: /* your serial port type */,
+}
+
+impl HciDriver for UartHciDriver {
+    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, HciDriverError> {
+        self.serial.read(buf).await.map_err(|_| HciDriverError::ReadFailure)
+    }
+
+    async fn write(&mut self, buf: &[u8]) -> Result<usize, HciDriverError> {
+        self.serial.write(buf).await.map_err(|_| HciDriverError::WriteFailure)
+    }
+}
+```
+
+### 3. Implement `BleHostObserver`
+
+```rust
+use bletio_host::{BleHost, BleHostObserver, BleHostStates};
+use bletio_hci::HciDriver;
+
+struct MyObserver;
+
+impl BleHostObserver for MyObserver {
+    async fn ready<H: HciDriver>(
+        &self,
+        host: BleHost<H, bletio_host::BleHostStateStandby>,
+    ) -> BleHostStates<H> {
+        println!("BLE stack ready. Address: {:?}", host.public_device_address());
+        // Start advertising...
+        BleHostStates::Standby(host)
+    }
+}
+```
+
+### 4. Run the device
+
+```rust
+#[tokio::main]
+async fn main() -> Result<(), bletio_host::Error> {
+    let observer = MyObserver;
+    let mut device = bletio_host::BleDevice::builder(observer)
+        .with_local_name("My BLE Device")
+        .build();
+
+    let hci_driver = UartHciDriver { serial: /* ... */ };
+    device.run(hci_driver).await
+}
+```
+
+---
+
+## Event Loop Lifecycle
+
+```
+         ┌──────────┐
+         │  Initial  │
+         └─────┬─────┘
+        setup()│
+     ┌────────┴────────┐
+     │    Standby       │◄──────────────────────────────┐
+     └──┬──────┬───────┘                               │
+        │      │                                        │
+   start_ │  start_ │ connect()                        │
+   adv() │ scan()  │                                   │
+   ┌─────┴┐ ┌─────┴──────┐  ┌───────────┐             │
+   │Adv.  │ │ Scanning    │  │Initiating │             │
+   └──┬───┘ └──┬──┬──────┘  └─────┬──────┘             │
+      │        │  │               │                     │
+      │ connect│  │ stop_scan()    │ connection_complete │
+      │ event  │  │               │                     │
+      │   ┌────┘  │               └──────────┐          │
+      │   │       └──────────────────┐        │          │
+      │   │                          │        │          │
+   ┌──┴───┴────┐              ┌──────┴────────┴──────┐  │
+   │Connected  │              │  ConnectedCentral     │  │
+   │Peripheral │              │                        │  │
+   └─────┬─────┘              └───────────┬────────────┘  │
+         │                               │               │
+         │   disconnect / disconnection   │               │
+         └───────────────┬───────────────┘               │
+                         └───────────────────────────────┘
+```
+
+---
+
+## CI Pipeline
+
+| Job | Description |
+|-----|-------------|
+| **Rustfmt** | Enforces formatting with `cargo fmt --all --check` |
+| **Test** | Runs `cargo test` with Rust cache |
+| **Clippy** | Lints with `cargo clippy -- -D warnings` |
+| **Coverage** | Code coverage via `cargo-tarpaulin` |
+| **Security Audit** | Daily `cargo-deny` advisory scan |
+
+---
+
+## License
+
+Dual-licensed under either of:
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](LICENSE-MIT))
+
+at your option.
+
+---
+
+## Codebase Enhancement & Improvement Plan
+
+The sections below outline a phased roadmap for bringing `bletio` from a connection-management
+stack to a full-featured BLE host. Each phase builds on the previous one and includes
+concrete, actionable items.
+
+---
+
+### Phase 1 — Hardening & Polish (target: stability)
+
+These items address the highest-priority issues in the current codebase with minimal
+risk to the existing architecture.
+
+| # | Item | Priority | Effort | Description |
+|---|------|----------|--------|-------------|
+| 1.1 | **Fix ACL data `todo!()` panics** | 🔴 Critical | M | Replace `todo!()` in `hci.rs` with proper ACL data buffering and dispatch. Currently, receiving ACL data triggers a panic — this makes the stack unusable for any connected device beyond connection establishment. Paired with a public API for reading received ACL payloads. |
+| 1.2 | **Double-buffer the event list** | 🟡 High | S | The current 4-event `heapless::Vec` silently drops events with only a `defmt::warn!` when full. Under bursty advertising traffic, the scan response can be lost. Either: (a) make the capacity configurable via const generic, (b) implement a ring buffer, or (c) use a double-buffer swap to decouple parsing from consumption. |
+| 1.3 | **Add `log` support as alternative to `defmt`** | 🟡 High | S | When `defmt` is not enabled, warnings and debug messages are completely invisible. Add an optional `log` feature so host-platform users get diagnostics without defmt tooling. |
+| 1.4 | **Document the public API** | 🟡 High | M | Add doc comments with examples to: `BleDevice`, `BleHostObserver`, `BleHost`, `HciDriver`, all builder types, `AdvertisingData`, `FullAdvertisingData`, `AdStruct`, and key AD structure types. Include at least one end-to-end example module. |
+| 1.5 | **Remove `UnexpectedEvent` fallibility** | 🟢 Medium | XS | The `_ => Err(Error::UnexpectedEvent)` branch in `execute_command_with_command_status_response` is marked "not reachable". Replace with `unreachable!()` or a debug assertion to clarify intent. |
+| 1.6 | **Add `Unsupported` event logging** | 🟢 Medium | XS | When the parser encounters an unknown event code (`Event::Unsupported(u8)`), log a warning even without defmt. Add a callback or hook so applications can opt into knowing about unknown events. |
+| 1.7 | **Improve `Packet`/`Event` enum sizes** | 🟢 Medium | S | The `size_of.txt` shows `Packet` was reduced from 1208→264 bytes and `Event` from 1208→264 bytes after a refactor. `LeAdvertisingReportList` at 260 bytes still dominates. Consider `Box<[u8]>` behind an alloc feature, or store advertising report fields unpacked instead of as a nested struct. |
+| 1.8 | **Controller reset timeout** | 🟢 Medium | S | The `cmd_reset()` call during setup has no explicit timeout beyond the 1-second command timeout. A controller reset may take significantly longer. Consider a longer timeout or separate `cmd_reset_with_timeout()`. |
+
+---
+
+### Phase 2 — Data Plane Foundation (target: ACL data flow)
+
+The stack currently handles only the control plane (commands and events). The data plane
+(ACL packets carrying ATT/GATT/SMP traffic) is the next critical layer.
+
+| # | Item | Priority | Effort | Description |
+|---|------|----------|--------|-------------|
+| 2.1 | **ACL send path** | 🔴 Critical | M | Implement `cmd_send_acl_data()` that fragments and sends ACL data packets respecting the controller's buffer size (`le_data_packet_length`, `num_le_data_packets`). Add an `AclData` type that implements `EncodeToBuffer` and includes connection handle, PB flag, and BC flag. |
+| 2.2 | **ACL receive path** | 🔴 Critical | M | Complete the `Packet::AclData` branch in `wait_for_event()`. Buffer received ACL packets per connection handle. Expose a method to read pending ACL data for a connection — either a callback on the observer or a pull-based interface. |
+| 2.3 | **ACL credit-based flow control** (LE-Credit) | 🟡 High | L | For BLE 4.2+ controllers supporting LE Data Length Extension, implement LE credit-based flow control (LE Flow Control Credit command/event). Track credits per connection handle and block sends when exhausted. |
+| 2.4 | **Connection handle registry** | 🟡 High | M | Maintain an internal map of active connections (`ConnectionHandle` → state). Currently the host tracks connections only implicitly via state transitions. An explicit registry enables per-connection ACL queues, GATT transaction state, and connection parameter tracking. |
+| 2.5 | **Add `AclData` as an event variant or observer callback** | 🟢 Medium | M | Decide on the data delivery model: add `Event::AclData` to the event enum (pull model), or add an `acl_data_received` callback to `BleHostObserver` (push model). The pull model preserves `no_std` constraints better. |
+
+---
+
+### Phase 3 — ATT & GATT Foundation (target: service discovery & characteristic access)
+
+With ACL data flowing, the next layer is the Attribute Protocol (ATT) and Generic
+Attribute Profile (GATT).
+
+| # | Item | Priority | Effort | Description |
+|---|------|----------|--------|-------------|
+| 3.1 | **ATT PDU encoding/decoding** | 🔴 Critical | L | Implement ATT PDU types per Core Spec v6.0, Vol. 3, Part F: Error Response, Exchange MTU Request/Response, Find Information, Read By Type, Read/Write Request/Response, Handle Value Notification/Indication/Confirmation. Use the existing `EncodeToBuffer` trait and nom parsers for consistency. |
+| 3.2 | **ATT client state machine** | 🔴 Critical | XL | Implement a sequential request-response client. The ATT protocol is strictly sequential: one outstanding request per direction. Track pending requests with timeouts (ATT transaction timeout = 30 seconds). |
+| 3.3 | **GATT discovery procedures** | 🔴 Critical | L | Built on the ATT client: Primary Service Discovery, Relationship Discovery, Characteristic Discovery, Characteristic Descriptor Discovery. Provide ergonomic async functions that return discovered service/characteristic/descriptor hierarchies. |
+| 3.4 | **GATT client read/write operations** | 🟡 High | M | Read Characteristic Value, Write Characteristic Value (with/without response), Read Characteristic Descriptor, Write Characteristic Descriptor, Notifications, Indications. |
+| 3.5 | **GATT server framework** | 🟡 High | XL | A mechanism for applications to register local GATT services with characteristics and descriptors. Handle incoming ATT requests from connected centrals. Provide builder patterns for service/characteristic/descriptor registration. |
+| 3.6 | **GATT profiles** | 🟢 Medium | XL | Implement standard GATT profiles as optional modules: Device Information Service (DIS), Battery Service (BAS), Generic Access Profile (GAP), Generic Attribute Profile. |
+
+---
+
+### Phase 4 — Security (target: pairing & bonding)
+
+| # | Item | Priority | Effort | Description |
+|---|------|----------|--------|-------------|
+| 4.1 | **SMP command parsing** | 🟡 High | L | Implement Security Manager Protocol PDU encoding/decoding: Pairing Request/Response, Pairing Confirm, Pairing Random, Pairing Failed, Encryption Information, Master Identification, Identity Information/Address, Signing Information, Security Request. |
+| 4.2 | **LE Legacy Pairing** | 🟡 High | XL | Just Works, Passkey Entry, Out of Band, Numeric Comparison pairing methods. Implement the full SMP state machine per Core Spec v4.2, Vol. 3, Part H. |
+| 4.3 | **LE Secure Connections** | 🟢 Medium | XL | FIPS-approved ECDH key exchange (P-256 curve) with AES-CCM encryption and HMAC-SHA256 for LE Secure Connections pairing. |
+| 4.4 | **Bonding & key storage** | 🟢 Medium | L | Define a `KeyStore` trait that applications implement for persistent storage of bonded device keys (LTK, EDIV/Rand, IRK, CSRK). Provide an in-memory implementation for testing. |
+
+---
+
+### Phase 5 — Features & Performance (target: completeness)
+
+| # | Item | Priority | Effort | Description |
+|---|------|----------|--------|-------------|
+| 5.1 | **LE Extended Advertising** | 🟢 Medium | XL | BLE 5.0 extended advertising: larger payloads (up to 1650 bytes), periodic advertising, advertising on secondary channels, multiple advertising sets, advertising data fragmentation over AUX_CHAIN_IND. |
+| 5.2 | **LE Coded PHY (Long Range)** | 🟢 Medium | L | Support for LE 1M, LE 2M, and LE Coded (S=2, S=8) PHY selection via `LE Set PHY` command. Parse `LE PHY Update Complete` event. |
+| 5.3 | **LE Isochronous Channels** | 🟢 Low | XL | BLE 5.2 LE Audio support: Connected Isochronous Streams (CIS), Broadcast Isochronous Streams (BIS), isochronous channel commands and events. |
+| 5.4 | **LE Periodic Advertising with Responses (PAwR)** | 🟢 Low | XL | BLE 5.4 feature for bidirectional periodic advertising. |
+| 5.5 | **Connection parameter optimization** | 🟢 Medium | M | Implement the connection parameter update request procedure per Core Spec. Add heuristics for automatic parameter optimization based on use case (high throughput, low latency, low power). |
+| 5.6 | **HCI vendor command extension** | 🟢 Medium | S | Add a `Command::VendorSpecific { ocf: u16, parameters: &[u8] }` variant and a corresponding event variant to allow applications to send vendor-specific HCI commands (common on nRF and TI controllers). |
+| 5.7 | **Connection supervision timeout event** | 🟢 Medium | S | Handle and expose the `Hardware Error` and `Data Buffer Overflow` events. Provide a callback on `BleHostObserver`. |
+| 5.8 | **Client Characteristic Configuration Descriptor (CCCD) writes** | 🟢 Medium | M | Automatically track notification/indication subscription state from CCCD writes in the GATT server framework. |
+| 5.9 | **Dynamic MTU negotiation** | 🟢 Medium | S | Handle ATT Exchange MTU request/response automatically in the ATT layer. Expose the negotiated MTU to the application. |
+| 5.10 | **Power profiling & low-power modes** | 🟢 Low | M | Document power consumption characteristics. Add support for controller sleep modes. Provide examples of duty-cycled advertising and connection intervals for battery-powered peripherals. |
+
+---
+
+### Phase 6 — Developer Experience (target: ecosystem)
+
+| # | Item | Priority | Effort | Description |
+|---|------|----------|--------|-------------|
+| 6.1 | **Integration tests with virtual controller** | 🟡 High | XL | Write integration tests using a BLE controller simulator (or a mock HCI that implements the controller side of HCI). This tests the full stack end-to-end: advertising, scanning, connection, pairing, GATT operations. |
+| 6.2 | **`bletio` CLI tool** | 🟢 Medium | L | A command-line tool for interacting with BLE devices using a local HCI controller. Useful for debugging, testing, and as a reference application. |
+| 6.3 | **Usage examples** | 🟡 High | M | Standalone examples in `examples/`: temperature peripheral, heart rate peripheral, central scanner, battery service, LED control. Each example should target both Tokio (for CI) and a real embedded board. |
+| 6.4 | **Platform support matrix** | 🟢 Medium | S | Document and CI-test against: nRF52840, nRF5340, ESP32-C3, STM32WB, Raspberry Pi (via `hciattach`), and Linux HCI sockets. |
+| 6.5 | **Conformance testing** | 🟢 Low | XL | Run against Bluetooth SIG qualification test suite (PTS) where feasible. Document PTS test results for qualification. |
+| 6.6 | **`defmt` / `log` structured event tracing** | 🟢 Low | M | Emit structured events (not just free-text) for all state transitions, HCI command/event exchanges, and GATT operations. Enable post-mortem analysis of BLE interactions. |
+| 6.7 | **Semver-gated releases** | 🟢 Medium | S | Publish to crates.io with proper semver. Set up CI for automated release publishing on tag. |
+
+---
+
+### Ongoing
+
+| # | Item | Description |
+|---|------|-------------|
+| O.1 | **Keep assigned numbers current** | Run `update-assigned-numbers` periodically (or via CI scheduled job) to sync with Bluetooth SIG updates for company IDs, service UUIDs, and appearance values. |
+| O.2 | **Security audit** | The daily `cargo-deny` audit is already in place. Add `cargo-audit` for RustSec advisory database checks. |
+| O.3 | **MSRV policy** | Document and CI-test a Minimum Supported Rust Version. The project uses edition 2021 and stable features only. |
+| O.4 | **Fuzz testing** | Add fuzz targets for the nom parsers (HCI packets, advertising data, ATT PDUs) using `cargo-fuzz` or `afl.rs`. Parsers are the primary attack surface. |
+
+---
+
+### Summary by Phase
+
+| Phase | Focus | Critical Items | Est. Total Effort |
+|-------|-------|---------------|-------------------|
+| 1 | Hardening | ACL todo!(), event list overflow, docs | ~2–3 weeks |
+| 2 | Data plane | ACL send/receive, credit flow control, connection registry | ~3–4 weeks |
+| 3 | ATT & GATT | ATT PDU encoding, GATT client/server, profiles | ~2–3 months |
+| 4 | Security | SMP, LE Legacy Pairing, LE Secure Connections, bonding | ~2–3 months |
+| 5 | Features | Extended advertising, Coded PHY, connection optimization | ~2–4 months |
+| 6 | Developer exp. | Integration tests, examples, CLI, platform matrix | ~2–3 months |
+
+Effort estimates assume single-developer velocity and are rough order-of-magnitude guides.
