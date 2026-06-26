@@ -302,7 +302,7 @@ The stack currently handles only the control plane (commands and events). The da
 |---|------|----------|--------|--------|-------------|
 | 2.1 | **ACL send path** | 🔴 Critical | M | ✅ Done | Added `write_acl_data()` to `Hci<H>`, `send_acl_data()` to `BleHost` connected states, `EncodeToBuffer` impl and public getters/builders on `AclData`. ACL data is encoded in HCI ACL packet format and written via the driver. |
 | 2.2 | **ACL receive path** | 🔴 Critical | M | ✅ Done | `Event::AclData` variant (added in Phase 1.1) is now wired through `BleDevice` to the observer's `acl_data_received` callback. Received ACL data is dispatched per-connection-handle to the application. |
-| 2.3 | **ACL credit-based flow control** (LE-Credit) | 🟡 High | L | ⬜ | Only needed for BLE 4.2+ controllers with LE Data Length Extension. Deferred until required by a target controller. |
+| 2.3 | **ACL credit-based flow control** (LE-Credit) | 🟡 High | L | ✅ Done | `le_acl_credits` tracking on `Hci<H>`. `write_acl_data()` checks/decrements credits, returns `ControllerBusy` when exhausted. `LeFlowControlCreditEvent` parsing restores credits. Initialized from `cmd_le_read_buffer_size` during setup. |
 | 2.4 | **Connection handle registry** | 🟡 High | M | ⬜ | Application tracks handles via `connection_complete` callback. A dedicated registry will be more valuable once Phase 3 (GATT) requires per-connection transaction state. |
 | 2.5 | **Add `AclData` as observer callback** | 🟢 Medium | M | ✅ Done | Added `acl_data_received` callback to `BleHostObserver` (push model). Both `Event::AclData` variant and observer callback coexist — events are buffered in the HCI layer, then dispatched to the observer. |
 
