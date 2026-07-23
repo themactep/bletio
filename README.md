@@ -11,27 +11,27 @@ A **`no_std`-compatible Bluetooth Low Energy (BLE) stack** for embedded Rust, ta
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────┐
+┌──────────────────────────────────────────────┐
 │                 Application                  │
 │  (implements BleHostObserver)                │
-├─────────────────────────────────────────────┤
+├──────────────────────────────────────────────┤
 │              bletio-host                     │
 │  Type-state machine, observer pattern,       │
 │  advertising structures, connection mgmt     │
-├─────────────────────────────────────────────┤
+├──────────────────────────────────────────────┤
 │              bletio-hci                      │
 │  HCI command/event encoding & parsing,       │
 │  controller flow control, timeouts           │
-├─────────────────────────────────────────────┤
+├──────────────────────────────────────────────┤
 │              bletio-utils                    │
 │  Const-generic buffers, LE integer encoding, │
 │  bitfield arrays                             │
-├─────────────────────────────────────────────┤
+├──────────────────────────────────────────────┤
 │        HciDriver trait (you implement)       │
 │  UART / USB / SPI transport to controller    │
-├─────────────────────────────────────────────┤
-│           BLE Controller (hardware)           │
-└─────────────────────────────────────────────┘
+├──────────────────────────────────────────────┤
+│           BLE Controller (hardware)          │
+└──────────────────────────────────────────────┘
 ```
 
 ### Crates
@@ -227,33 +227,33 @@ async fn main() -> Result<(), bletio_host::Error> {
 ## Event Loop Lifecycle
 
 ```
-         ┌──────────┐
-         │  Initial  │
-         └─────┬─────┘
-        setup()│
-     ┌────────┴────────┐
-     │    Standby       │◄──────────────────────────────┐
-     └──┬──────┬───────┘                               │
-        │      │                                        │
-   start_ │  start_ │ connect()                        │
-   adv() │ scan()  │                                   │
-   ┌─────┴┐ ┌─────┴──────┐  ┌───────────┐             │
-   │Adv.  │ │ Scanning    │  │Initiating │             │
-   └──┬───┘ └──┬──┬──────┘  └─────┬──────┘             │
-      │        │  │               │                     │
-      │ connect│  │ stop_scan()    │ connection_complete │
-      │ event  │  │               │                     │
-      │   ┌────┘  │               └──────────┐          │
-      │   │       └──────────────────┐        │          │
-      │   │                          │        │          │
-   ┌──┴───┴────┐              ┌──────┴────────┴──────┐  │
-   │Connected  │              │  ConnectedCentral     │  │
-   │Peripheral │              │                        │  │
-   └─────┬─────┘              └───────────┬────────────┘  │
-         │                               │               │
-         │   disconnect / disconnection   │               │
-         └───────────────┬───────────────┘               │
-                         └───────────────────────────────┘
+           ┌───────────┐
+           │  Initial  │
+           └─────┬─────┘
+          setup()│
+       ┌─────────┴──────────┐
+       │      Standby       │◄────────────────────────────┐
+       └──┬─────────┬───────┘                             │
+          │         │                                     │
+   start_ │  start_ │ connect()                           │
+    adv() │ scan()  │                                     │
+    ┌─────┴┐ ┌──────┴──────┐ ┌────────────┐               │
+    │Adv.  │ │ Scanning    │ │ Initiating │               │
+    └──┬───┘ └──┬──┬───────┘ └─────┬──────┘               │
+       │        │  │               │                      │
+       │ connect│  │ stop_scan()   │ connection_complete  │
+       │ event  │  │               │                      │
+       │   ┌────┘  │               └──────────┐           │
+       │   │       └──────────────────┐       │           │
+       │   │                          │       │           │
+    ┌──┴───┴────┐              ┌──────┴───────┴──────┐    │
+    │Connected  │              │  ConnectedCentral   │    │
+    │Peripheral │              │                     │    │
+    └─────┬─────┘              └───────────┬─────────┘    │
+          │                                │              │
+          │   disconnect / disconnection   │              │
+          └───────────────┬────────────────┘              │
+                          └───────────────────────────────┘
 ```
 
 ---
